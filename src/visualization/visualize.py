@@ -4,10 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 
-
 # Load data
 df = pd.read_pickle("../../data/interim/01_data_processed.pkl")
-
 
 # Plot single columns
 set_df = df[df["set"] == 1]
@@ -20,7 +18,6 @@ for label in df["label"].unique():
     plt.plot(subset[:100]["acc_y"].reset_index(drop=True), label=label)
     plt.legend()
     plt.show()
-
 
 # Adjust plot settings
 sns.set_style("darkgrid")
@@ -57,7 +54,7 @@ ax.set_ylabel("acc_y")
 ax.set_xlabel("samples")
 plt.legend()
 
-# loop to plot all combinations per sensor
+# Loop to plot all combinations per sensor
 labels = df["label"].unique()
 participants = df["participant"].unique()
 
@@ -94,7 +91,6 @@ for label in labels:
             plt.legend()
 
 # Combine plots in one figure
-
 label = "row"
 participant = "A"
 combined_plot_df = (
@@ -111,8 +107,7 @@ ax[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.15), ncol=3, fancybox=Tr
 ax[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.15), ncol=3, fancybox=True, shadow=True)
 ax[1].set_xlabel("samples")
 
-# Loop over all combinations of participants and exercise and export to reports/figures
-
+# Loop over all combinations of participants and exercises and export to reports/figures
 labels = df["label"].unique()
 participants = df["participant"].unique()
 

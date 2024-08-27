@@ -44,3 +44,9 @@ Saved the processed dataset to a pickle file (01_data_processed.pkl) for future 
 ### Step 3: Detecting Outliers
 ### Step 4: Predictive Modelling
 ### Step 5: Counting Repetitions
+
+## References
+
+Book: [Hoogendoorn, M. and Funk, B., Machine Learning for the Quantified Self - On the Art of Learning from Sensory Data, Springer, 2018.](https://link.springer.com/book/10.1007/978-3-319-66308-1)
+
+Code snippets retrieved from: https://github.com/mhoogen/ML4QS
