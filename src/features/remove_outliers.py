@@ -1,3 +1,5 @@
+# remove_outliers.py
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -153,7 +155,7 @@ def mark_outliers_chauvenet(dataset, col, C=2):
     for i in range(0, len(dataset.index)):
         # Determine the probability of observing the point
         prob.append(
-            1.0 - 0.5 * (scipy.special.erf(high[i]) - scipy.special.erf(low[i]))
+            1.0 - 0.5 * (scipy.special.erf(high.iloc[i]) - scipy.special.erf(low.iloc[i]))
         )
         # And mark as an outlier when the probability is below our criterion.
         mask.append(prob[i] < criterion)
@@ -211,3 +213,27 @@ for col in outlier_columns:
 dataset, outliers, X_scores = mark_outliers_lof(df, outlier_columns) 
 for col in outlier_columns:
     plot_binary_outliers(dataset=dataset, col=col, outlier_col="outlier_lof", reset_index=True)
+
+# Choose a method and deal with the outliers
+col = "gyr_z"
+dataset = mark_outliers_chauvenet(df, col=col)
+dataset[dataset["gyr_z_outlier"]]
+
+dataset.loc[dataset["gyr_z_outlier"], "gyr_z"] = np.nan
+
+outliers_removed_df = df.copy()
+for col in outlier_columns:
+    for label in df["label"].unique():
+        # Mark outliers
+        dataset = mark_outliers_chauvenet(df[df["label"] == label], col)
+        
+        # Count the number of outliers detected
+        n_outliers = dataset[col + "_outlier"].sum()
+        
+        # Replace values marked as outliers with NaN
+        dataset.loc[dataset[col + "_outlier"], col] = np.nan
+        
+        # Update the column in the original dataframe
+        outliers_removed_df.loc[(outliers_removed_df["label"] == label), col] = dataset[col]
+        
+        print(f"Removed {n_outliers} outliers from {col} for {label}")
