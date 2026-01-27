@@ -237,3 +237,7 @@ for col in outlier_columns:
         outliers_removed_df.loc[(outliers_removed_df["label"] == label), col] = dataset[col]
         
         print(f"Removed {n_outliers} outliers from {col} for {label}")
+        
+outliers_removed_df.info()
+
+outliers_removed_df.to_pickle("../../data/interim/02_outliers_removed_chauvenets.pkl")
