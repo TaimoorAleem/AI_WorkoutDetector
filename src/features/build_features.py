@@ -4,10 +4,6 @@ import matplotlib.pyplot as plt
 from DataTransformation import LowPassFilter, PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
 
-# --------------------------------------------------------------
-# Load data
-# --------------------------------------------------------------
-
 df = pd.read_pickle("../../data/interim/02_outliers_removed_chauvenets.pkl")
 predictor_columns = list(df.columns[:6])
 
@@ -17,10 +13,6 @@ plt.rcParams['figure.figsize'] = (20, 5)
 plt.rcParams['figure.dpi'] = 100
 plt.rcParams['lines.linewidth'] = 2
 
-# --------------------------------------------------------------
-# Dealing with missing values (imputation)
-# --------------------------------------------------------------
-
 df.info()
 
 subset = df[df["set"] == 50]
@@ -29,10 +21,6 @@ for col in predictor_columns:
     df[col] = df[col].interpolate()
     
 df.info()
-
-# --------------------------------------------------------------
-# Calculating set duration
-# --------------------------------------------------------------
 
 df[df["set"] == 50]["acc_y"].plot()
 
@@ -51,10 +39,6 @@ duration_df = df.groupby(["category"])["duration"].mean()
 
 duration_df.iloc[0] / 5 # Average rep duration for the first set
 duration_df.iloc[1] / 10 # Average rep duration for the second set
-
-# --------------------------------------------------------------
-# Butterworth lowpass filter
-# --------------------------------------------------------------
 
 df_lowpass = df.copy()
 LowPass = LowPassFilter()
@@ -78,37 +62,19 @@ for col in predictor_columns:
     df_lowpass[col] = df_lowpass[col + "_lowpass"]
     del df_lowpass[col + "_lowpass"]
 
+df_pca = df_lowpass.copy()
+PCA = PrincipalComponentAnalysis()
 
-# --------------------------------------------------------------
-# Principal component analysis PCA
-# --------------------------------------------------------------
+pc_values = PCA.determine_pc_explained_variance(df_pca, predictor_columns)
 
+plt.figure(figsize=(10, 10))
+plt.plot(range(1, len(predictor_columns) + 1), pc_values)
+plt.xlabel("Number of principal components")
+plt.ylabel("Explained variance")
+plt.title("PCA explained variance")
+plt.show()
 
-# --------------------------------------------------------------
-# Sum of squares attributes
-# --------------------------------------------------------------
+df_pca = PCA.apply_pca(df_pca, predictor_columns, 3)
+subset = df_pca[df_pca["set"] == 30]
 
-
-# --------------------------------------------------------------
-# Temporal abstraction
-# --------------------------------------------------------------
-
-
-# --------------------------------------------------------------
-# Frequency features
-# --------------------------------------------------------------
-
-
-# --------------------------------------------------------------
-# Dealing with overlapping windows
-# --------------------------------------------------------------
-
-
-# --------------------------------------------------------------
-# Clustering
-# --------------------------------------------------------------
-
-
-# --------------------------------------------------------------
-# Export dataset
-# --------------------------------------------------------------
+subset[["pca_1", "pca_2", "pca_3"]].plot()
