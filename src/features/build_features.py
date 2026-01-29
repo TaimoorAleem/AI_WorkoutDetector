@@ -15,6 +15,8 @@ plt.rcParams['lines.linewidth'] = 2
 
 df.info()
 
+# Dealing with missing values (imputation)
+
 subset = df[df["set"] == 50]
 
 for col in predictor_columns:
@@ -40,6 +42,8 @@ duration_df = df.groupby(["category"])["duration"].mean()
 duration_df.iloc[0] / 5 # Average rep duration for the first set
 duration_df.iloc[1] / 10 # Average rep duration for the second set
 
+# Low Pass Filter
+
 df_lowpass = df.copy()
 LowPass = LowPassFilter()
 
@@ -62,6 +66,8 @@ for col in predictor_columns:
     df_lowpass[col] = df_lowpass[col + "_lowpass"]
     del df_lowpass[col + "_lowpass"]
 
+# Principal Component Analysis
+
 df_pca = df_lowpass.copy()
 PCA = PrincipalComponentAnalysis()
 
@@ -78,3 +84,17 @@ df_pca = PCA.apply_pca(df_pca, predictor_columns, 3)
 subset = df_pca[df_pca["set"] == 30]
 
 subset[["pca_1", "pca_2", "pca_3"]].plot()
+
+# Sum of squares attributes
+
+df_squared = df_pca.copy()
+
+acc_r = df_squared["acc_x"] ** 2 + df_squared["acc_y"] ** 2 + df_squared["acc_z"] ** 2
+gyr_r = df_squared["gyr_x"] ** 2 + df_squared["gyr_y"] ** 2 + df_squared["gyr_z"] ** 2
+
+df_squared["acc_r"] = np.sqrt(acc_r)
+df_squared["gyr_r"] = np.sqrt(gyr_r)
+
+subset = df_squared[df_squared["set"] == 14]
+
+subset[["acc_r", "gyr_r"]].plot(subplots=True)
