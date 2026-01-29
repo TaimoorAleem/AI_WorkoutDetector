@@ -4,8 +4,7 @@ from scipy.signal import butter, lfilter, filtfilt
 import copy
 import pandas as pd
 
-# This class removes the high frequency data (that might be considered noise) from the data.
-# We can only apply this when we do not have missing values (i.e. NaN).
+# Removes the high frequency data (that might be considered noise) from the data.
 class LowPassFilter:
     def low_pass_filter(
         self,
