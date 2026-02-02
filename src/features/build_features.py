@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from DataTransformation import LowPassFilter, PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
+from FrequencyAbstraction import FourierTransformation
 
 df = pd.read_pickle("../../data/interim/02_outliers_removed_chauvenets.pkl")
 predictor_columns = list(df.columns[:6])
@@ -127,3 +128,38 @@ df_temporal.info()
 
 subset[["acc_y", "acc_y_temp_mean_ws_5", "acc_y_temp_std_ws_5"]].plot()
 subset[["gyr_y", "gyr_y_temp_mean_ws_5", "gyr_y_temp_std_ws_5"]].plot()
+
+# Frequency Features
+
+df_frequency = df_temporal.copy().reset_index()
+FreqAbs = FourierTransformation()
+
+sampling_rate = int(1000 / 200)  # Sampling rate in Hz
+window_size = int(2000 / 200)  # Window size of 2 seconds
+
+df_freq = FreqAbs.abstract_frequency(df_frequency, ["acc_y"], window_size, sampling_rate)
+
+df_freq.columns
+
+subset = df_freq[df_freq["set"] == 15]
+subset[["acc_y"]].plot()
+subset[
+    ["acc_y_max_freq", 
+     "acc_y_freq_weighted", 
+     "acc_y_pse",
+     "acc_y_freq_1.0_Hz_ws_10",
+     "acc_y_freq_2.5_Hz_ws_10",]
+].plot()
+
+df_freq_list = []
+for s in df_freq["set"].unique():
+    print("Applying Forier Transformation to set:", s)
+    subset = df_freq[df_freq["set"] == s].reset_index(drop=True).copy()
+    subset = FreqAbs.abstract_frequency(subset, predictor_columns, window_size, sampling_rate)
+    df_freq_list.append(subset)
+    
+df_freq = pd.concat(df_freq_list).set_index("epoch (ms)", drop=True)
+
+df_freq.info()
+df_freq = df_freq.dropna()
+df_freq = df_freq.iloc[::2]
