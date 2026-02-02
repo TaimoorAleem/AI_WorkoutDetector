@@ -98,3 +98,32 @@ df_squared["gyr_r"] = np.sqrt(gyr_r)
 subset = df_squared[df_squared["set"] == 14]
 
 subset[["acc_r", "gyr_r"]].plot(subplots=True)
+
+# Temporal Abstraction
+
+df_temporal = df_squared.copy()
+NumAbs = NumericalAbstraction()
+
+predictor_columns = predictor_columns + ["acc_r", "gyr_r"]
+
+window_size = 5 # one second (1000ms / 200 ms per sample)
+
+for col in predictor_columns:
+    df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, "mean")
+    df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, "std")
+
+df_temporal_list = []
+
+for s in df_temporal["set"].unique():
+    subset = df_temporal[df_temporal["set"] == s].copy()
+    for col in predictor_columns:
+        subset = NumAbs.abstract_numerical(subset, [col], window_size, "mean")
+        subset = NumAbs.abstract_numerical(subset, [col], window_size, "std")
+    df_temporal_list.append(subset)
+
+df_temporal = pd.concat(df_temporal_list)
+
+df_temporal.info()
+
+subset[["acc_y", "acc_y_temp_mean_ws_5", "acc_y_temp_std_ws_5"]].plot()
+subset[["gyr_y", "gyr_y_temp_mean_ws_5", "gyr_y_temp_std_ws_5"]].plot()
