@@ -40,15 +40,33 @@ def main():
     # Resample to 200ms intervals
     resampled_df = loader.resample_data(merged_df, sampling_rule="200ms")
     
-    # Remove outliers
+    # Remove outliers using method from config
+    outlier_method = config.OUTLIER_CONFIG["method"]
+    logger.info(f"Using {outlier_method} method for outlier detection")
+    
     outlier_remover = OutlierRemover()
     sensor_columns = ["acc_x", "acc_y", "acc_z", "gyr_x", "gyr_y", "gyr_z"]
-    clean_df = outlier_remover.remove_outliers(resampled_df, sensor_columns, method="iqr")
+    
+    # Prepare outlier kwargs based on config
+    outlier_kwargs = {}
+    if config.OUTLIER_CONFIG.get("per_label"):
+        outlier_kwargs["per_label"] = True
+    if outlier_method == "chauvenet":
+        outlier_kwargs["C"] = config.OUTLIER_CONFIG.get("C", 2)
+    elif outlier_method == "lof":
+        outlier_kwargs["n"] = config.OUTLIER_CONFIG.get("n", 20)
+    
+    outliers_removed_df = outlier_remover.remove_outliers(
+        resampled_df, 
+        sensor_columns, 
+        method=outlier_method,
+        **outlier_kwargs
+    )
     
     # Save interim data
     interim_path = config.INTERIM_DATA_PATH / "01_data_processed.pkl"
     config.INTERIM_DATA_PATH.mkdir(parents=True, exist_ok=True)
-    clean_df.to_pickle(interim_path)
+    outliers_removed_df.to_pickle(interim_path)
     logger.info(f"Saved preprocessed data to {interim_path}")
 
 
