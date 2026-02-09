@@ -28,6 +28,16 @@ MODEL_DEFAULTS = {
     "use_gridsearch": True,  # Enable grid search in LearningAlgorithms
 }
 
+# Outlier detection configuration
+OUTLIER_CONFIG = {
+    "method": "chauvenet",  # Options: 'iqr', 'chauvenet', 'lof'
+    "per_label": False,  # Apply detection per label
+    
+    # Method-specific parameters
+    "C": 2,  # For Chauvenet method (certainty parameter, typically 1-10)
+    "n": 20,  # For LOF method (number of neighbors)
+}
+
 # Feature engineering configuration
 FEATURE_CONFIG = {
     "predictor_columns": ["acc_x", "acc_y", "acc_z", "gyr_x", "gyr_y", "gyr_z"],
