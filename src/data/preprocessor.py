@@ -1,6 +1,8 @@
 """
 Data preprocessing module for cleaning and preparing sensor data
 """
+# TODO: return visualization at each step
+
 import pandas as pd
 import numpy as np
 from pathlib import Path
