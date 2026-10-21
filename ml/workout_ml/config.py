@@ -5,21 +5,25 @@ import os
 from pathlib import Path
 
 # Project paths
-PROJECT_ROOT = Path(__file__).parent.parent
+# ml/workout_ml/config.py -> parents[2] is the repo root
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 MODELS_DIR = PROJECT_ROOT / "results" / "models"
 PLOTS_DIR = PROJECT_ROOT / "results" / "plots"
 METRICS_DIR = PROJECT_ROOT / "results" / "metrics"
 
-# Create directories if they don't exist
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
-PLOTS_DIR.mkdir(parents=True, exist_ok=True)
-METRICS_DIR.mkdir(parents=True, exist_ok=True)
-
 # Data configuration
 RAW_DATA_PATH = DATA_DIR / "raw" / "MetaMotion"
 PROCESSED_DATA_PATH = DATA_DIR / "processed"
 INTERIM_DATA_PATH = DATA_DIR / "interim"
+
+
+
+def ensure_dirs():
+    """Create output directories if they don't exist."""
+    for d in (MODELS_DIR, PLOTS_DIR, METRICS_DIR, INTERIM_DATA_PATH):
+        d.mkdir(parents=True, exist_ok=True)
+
 
 # Model configuration
 # Note: LearningAlgorithms performs its own grid search internally
