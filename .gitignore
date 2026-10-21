@@ -88,3 +88,10 @@ target/
 
 # Mypy cache
 .mypy_cache/
+
+# Generated pipeline artifacts (regenerate with run_pipeline.py)
+/data/interim/*
+!/data/interim/.gitkeep
+/data/processed/*
+!/data/processed/.gitkeep
+/results/
