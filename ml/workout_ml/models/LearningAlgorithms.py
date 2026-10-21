@@ -1,25 +1,24 @@
-#    Snippets from:   
-                                           
-#    Mark Hoogendoorn and Burkhardt Funk (2017)              
-#    Machine Learning for the Quantified Self                                                            
+#    Snippets from:
 
-from sklearn.neural_network import MLPClassifier
-from sklearn.svm import SVC
-from sklearn.svm import LinearSVC
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn import tree
-from sklearn.naive_bayes import GaussianNB
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import accuracy_score
-import pandas as pd
-import numpy as np
+#    Mark Hoogendoorn and Burkhardt Funk (2017)
+#    Machine Learning for the Quantified Self
+
 import copy
+
+import numpy as np
+import pandas as pd
+from sklearn import tree
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import GridSearchCV
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC, LinearSVC
+from sklearn.tree import DecisionTreeClassifier
 
 
 class ClassificationAlgorithms:
-
     # Forward selection for classification which selects a pre-defined number of features (max_features)
     # that show the best accuracy. We assume a decision tree learning for this purpose, but
     # this can easily be changed. It returns the best features.
@@ -29,7 +28,6 @@ class ClassificationAlgorithms:
         ordered_scores = []
         selected_features = []
         ca = ClassificationAlgorithms()
-        prev_best_perf = 0
 
         # Select the appropriate number of features.
         for i in range(0, max_features):
@@ -38,7 +36,6 @@ class ClassificationAlgorithms:
             # Determine the features left to select.
             features_left = list(set(X_train.columns) - set(selected_features))
             best_perf = 0
-            best_attribute = ""
 
             # For all features we can still select...
             for f in features_left:
@@ -66,7 +63,6 @@ class ClassificationAlgorithms:
                     best_feature = f
             # We select the feature with the best performance.
             selected_features.append(best_feature)
-            prev_best_perf = best_perf
             ordered_features.append(best_feature)
             ordered_scores.append(best_perf)
         return selected_features, ordered_features, ordered_scores
@@ -112,9 +108,7 @@ class ClassificationAlgorithms:
                     "alpha": [alpha],
                 }
             ]
-            nn = GridSearchCV(
-                MLPClassifier(), tuned_parameters, cv=5, scoring="accuracy"
-            )
+            nn = GridSearchCV(MLPClassifier(), tuned_parameters, cv=5, scoring="accuracy")
         else:
             # Create the model
             nn = MLPClassifier(
@@ -167,13 +161,9 @@ class ClassificationAlgorithms:
             tuned_parameters = [
                 {"kernel": ["rbf", "poly"], "gamma": [1e-3, 1e-4], "C": [1, 10, 100]}
             ]
-            svm = GridSearchCV(
-                SVC(probability=True), tuned_parameters, cv=5, scoring="accuracy"
-            )
+            svm = GridSearchCV(SVC(probability=True), tuned_parameters, cv=5, scoring="accuracy")
         else:
-            svm = SVC(
-                C=C, kernel=kernel, gamma=gamma, probability=True, cache_size=7000
-            )
+            svm = SVC(C=C, kernel=kernel, gamma=gamma, probability=True, cache_size=7000)
 
         # Fit the model
         svm.fit(train_X, train_y.values.ravel())
@@ -211,9 +201,7 @@ class ClassificationAlgorithms:
     ):
         # Create the model
         if gridsearch:
-            tuned_parameters = [
-                {"max_iter": [1000, 2000], "tol": [1e-3, 1e-4], "C": [1, 10, 100]}
-            ]
+            tuned_parameters = [{"max_iter": [1000, 2000], "tol": [1e-3, 1e-4], "C": [1, 10, 100]}]
             svm = GridSearchCV(LinearSVC(), tuned_parameters, cv=5, scoring="accuracy")
         else:
             svm = LinearSVC(C=C, tol=tol, max_iter=max_iter)
@@ -234,9 +222,7 @@ class ClassificationAlgorithms:
             distance_training_platt / distance_training_platt.sum(axis=1)[:, None]
         )
         distance_test_platt = 1 / (1 + np.exp(svm.decision_function(test_X)))
-        pred_prob_test_y = (
-            distance_test_platt / distance_test_platt.sum(axis=1)[:, None]
-        )
+        pred_prob_test_y = distance_test_platt / distance_test_platt.sum(axis=1)[:, None]
         pred_training_y = svm.predict(train_X)
         pred_test_y = svm.predict(test_X)
         frame_prob_training_y = pd.DataFrame(pred_prob_training_y, columns=svm.classes_)
@@ -260,9 +246,7 @@ class ClassificationAlgorithms:
         # Create the model
         if gridsearch:
             tuned_parameters = [{"n_neighbors": [1, 2, 5, 10]}]
-            knn = GridSearchCV(
-                KNeighborsClassifier(), tuned_parameters, cv=5, scoring="accuracy"
-            )
+            knn = GridSearchCV(KNeighborsClassifier(), tuned_parameters, cv=5, scoring="accuracy")
         else:
             knn = KNeighborsClassifier(n_neighbors=n_neighbors)
 
@@ -314,9 +298,7 @@ class ClassificationAlgorithms:
                 DecisionTreeClassifier(), tuned_parameters, cv=5, scoring="accuracy"
             )
         else:
-            dtree = DecisionTreeClassifier(
-                min_samples_leaf=min_samples_leaf, criterion=criterion
-            )
+            dtree = DecisionTreeClassifier(min_samples_leaf=min_samples_leaf, criterion=criterion)
 
         # Fit the model
 
@@ -333,9 +315,7 @@ class ClassificationAlgorithms:
         pred_prob_test_y = dtree.predict_proba(test_X)
         pred_training_y = dtree.predict(train_X)
         pred_test_y = dtree.predict(test_X)
-        frame_prob_training_y = pd.DataFrame(
-            pred_prob_training_y, columns=dtree.classes_
-        )
+        frame_prob_training_y = pd.DataFrame(pred_prob_training_y, columns=dtree.classes_)
         frame_prob_test_y = pd.DataFrame(pred_prob_test_y, columns=dtree.classes_)
 
         if print_model_details:
@@ -411,9 +391,7 @@ class ClassificationAlgorithms:
                     "criterion": ["gini", "entropy"],
                 }
             ]
-            rf = GridSearchCV(
-                RandomForestClassifier(), tuned_parameters, cv=5, scoring="accuracy"
-            )
+            rf = GridSearchCV(RandomForestClassifier(), tuned_parameters, cv=5, scoring="accuracy")
         else:
             rf = RandomForestClassifier(
                 n_estimators=n_estimators,

@@ -1,7 +1,8 @@
-from sklearn.decomposition import PCA
-from scipy.signal import butter, lfilter, filtfilt
 import copy
-import pandas as pd
+
+from scipy.signal import butter, filtfilt, lfilter
+from sklearn.decomposition import PCA
+
 
 # Removes the high frequency data (that might be considered noise) from the data.
 class LowPassFilter:
@@ -30,7 +31,6 @@ class LowPassFilter:
 # Class for Principal Component Analysis. We can only apply this when we do not have missing values (i.e. NaN).
 # For this we have to impute these first.
 class PrincipalComponentAnalysis:
-
     pca = []
 
     def __init__(self):
@@ -40,8 +40,7 @@ class PrincipalComponentAnalysis:
         dt_norm = copy.deepcopy(data_table)
         for col in columns:
             dt_norm[col] = (data_table[col] - data_table[col].mean()) / (
-                data_table[col].max()
-                - data_table[col].min()
+                data_table[col].max() - data_table[col].min()
                 # data_table[col].std()
             )
         return dt_norm
