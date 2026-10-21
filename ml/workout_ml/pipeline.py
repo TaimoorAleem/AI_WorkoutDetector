@@ -1,19 +1,12 @@
 """
 Pipeline script demonstrating end-to-end ML workflow
 """
-import sys
-from pathlib import Path
-import pandas as pd
 import logging
 
-# Add src to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root / "src"))
-
-from src.data.preprocessor import DataLoader, OutlierRemover
-from src.features.engineer_features import FeatureEngineer
-from src.models.model_trainer import ModelTrainer
-from src import config
+from workout_ml import config
+from workout_ml.data.preprocessor import DataLoader, OutlierRemover
+from workout_ml.features.engineer_features import FeatureEngineer
+from workout_ml.models.model_trainer import ModelTrainer
 
 # Setup logging
 logging.basicConfig(
@@ -25,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     """Run the complete ML pipeline"""
+    config.ensure_dirs()
     
     # Step 1: Load and preprocess data
     logger.info("=" * 50)

@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from DataTransformation import LowPassFilter
+from workout_ml.features.DataTransformation import LowPassFilter
 from scipy.signal import argrelextrema
+from workout_ml import config
 from sklearn.metrics import mean_absolute_error
 
-from src import data
 
 pd.options.mode.chained_assignment = None
 
@@ -16,7 +16,7 @@ plt.rcParams["figure.figsize"] = (20, 5)
 plt.rcParams["figure.dpi"] = 100
 plt.rcParams["lines.linewidth"] = 2
 
-df = pd.read_pickle("../../data/interim/01_data_processed.pkl")
+df = pd.read_pickle(config.INTERIM_DATA_PATH / "01_data_processed.pkl")
 df = df[df["label"] != "rest"]
 
 acc_r = np.sqrt(df["acc_x"]**2 + df["acc_y"]**2 + df["acc_z"]**2)

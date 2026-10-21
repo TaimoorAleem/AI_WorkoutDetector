@@ -14,7 +14,7 @@ import itertools
 import pickle
 import logging
 from pathlib import Path
-from .LearningAlgorithms import ClassificationAlgorithms
+from workout_ml.models.LearningAlgorithms import ClassificationAlgorithms
 
 logger = logging.getLogger(__name__)
 

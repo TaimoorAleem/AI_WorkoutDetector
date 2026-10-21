@@ -4,9 +4,9 @@ Feature engineering pipeline combining temporal and frequency features
 import pandas as pd
 import numpy as np
 import logging
-from .TemporalAbstraction import NumericalAbstraction
-from .FrequencyAbstraction import FourierTransformation
-from .DataTransformation import LowPassFilter, PrincipalComponentAnalysis
+from workout_ml.features.TemporalAbstraction import NumericalAbstraction
+from workout_ml.features.FrequencyAbstraction import FourierTransformation
+from workout_ml.features.DataTransformation import LowPassFilter, PrincipalComponentAnalysis
 
 logger = logging.getLogger(__name__)
 
