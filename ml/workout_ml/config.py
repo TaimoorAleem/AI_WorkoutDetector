@@ -1,7 +1,7 @@
 """
 Configuration file for AI Workout Detector
 """
-import os
+
 from pathlib import Path
 
 # Project paths
@@ -16,7 +16,6 @@ METRICS_DIR = PROJECT_ROOT / "results" / "metrics"
 RAW_DATA_PATH = DATA_DIR / "raw" / "MetaMotion"
 PROCESSED_DATA_PATH = DATA_DIR / "processed"
 INTERIM_DATA_PATH = DATA_DIR / "interim"
-
 
 
 def ensure_dirs():
@@ -36,7 +35,6 @@ MODEL_DEFAULTS = {
 OUTLIER_CONFIG = {
     "method": "chauvenet",  # Options: 'iqr', 'chauvenet', 'lof'
     "per_label": False,  # Apply detection per label
-    
     # Method-specific parameters
     "C": 2,  # For Chauvenet method (certainty parameter, typically 1-10)
     "n": 20,  # For LOF method (number of neighbors)
@@ -48,21 +46,11 @@ FEATURE_CONFIG = {
     "window_size": 10,
     "sampling_frequency": 1000 / 200,  # 5 Hz
     "lowpass_cutoff": 1.3,
-    "pca_components": 3
+    "pca_components": 3,
 }
 
 # Training configuration
-TRAIN_CONFIG = {
-    "test_size": 0.2,
-    "validation_size": 0.15,
-    "random_state": 42,
-    "stratify": True
-}
+TRAIN_CONFIG = {"test_size": 0.2, "validation_size": 0.15, "random_state": 42, "stratify": True}
 
 # Plotting configuration
-PLOT_CONFIG = {
-    "style": "fivethirtyeight",
-    "figure_size": (20, 5),
-    "dpi": 100,
-    "line_width": 2
-}
+PLOT_CONFIG = {"style": "fivethirtyeight", "figure_size": (20, 5), "dpi": 100, "line_width": 2}
