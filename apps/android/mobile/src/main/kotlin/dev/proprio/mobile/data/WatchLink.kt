@@ -35,6 +35,12 @@ interface WatchLink {
     /** Re-checks reachable nodes. */
     suspend fun refresh()
 
+    /**
+     * Opens Proprio on the watch with a "start session" request (Wear OS only lets a visible app start the recording
+     * foreground service). False when no watch is reachable or the remote launch failed.
+     */
+    suspend fun launchWatchApp(kind: SessionKind, participantId: String?): Boolean
+
     /** Each command returns false when no watch is reachable or the send failed. */
     suspend fun startSession(kind: SessionKind, participantId: String?): Boolean
     suspend fun endSession(): Boolean
@@ -78,9 +84,22 @@ class FakeWatchLink(private val sessionIdFactory: () -> String = { "00000000-000
 
     override suspend fun refresh() = Unit
 
+    /** Result of the next [launchWatchApp]; the fake watch app then starts the session itself, like the real one. */
+    var launchSucceeds = true
+
+    override suspend fun launchWatchApp(kind: SessionKind, participantId: String?): Boolean {
+        commands += "launch:$kind"
+        if (!_connected.value || !launchSucceeds) return false
+        sessionId = sessionIdFactory()
+        nextSegmentId = 1
+        _status.value = WatchStatus(WatchStatus.State.RECORDING, sessionId, kind, null, 0.0, 50.0, 50.0)
+        return true
+    }
+
     override suspend fun startSession(kind: SessionKind, participantId: String?): Boolean {
         commands += "session/start:$kind"
         if (!_connected.value) return false
+        if (sessionId != null) return true // already started (e.g. by the remote launch)
         sessionId = sessionIdFactory()
         nextSegmentId = 1
         _status.value = WatchStatus(WatchStatus.State.RECORDING, sessionId, kind, null, 0.0, 50.0, 50.0)

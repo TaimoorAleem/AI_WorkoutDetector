@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
@@ -45,6 +47,7 @@ import dev.proprio.protocol.SegmentKind
 import androidx.compose.foundation.gestures.detectTapGestures
 
 private val ACC_COLOR = Color(0xFF1E6FD9)
+private val UNCONFIRMED_COLOR = Color(0xFFE65100)
 private val GYR_COLOR = Color(0xFFD9822B)
 
 fun overlayColor(kind: SegmentKind?): Color = when (kind) {
@@ -86,7 +89,7 @@ fun ReviewScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("|acc|", color = ACC_COLOR)
                     Text("|gyro|", color = GYR_COLOR)
-                    Text("tap the plot or a row to select", style = MaterialTheme.typography.bodySmall)
+                    Text("tap the plot or a row to select; orange bar = unconfirmed", style = MaterialTheme.typography.bodySmall)
                 }
                 state.segments.forEach { seg ->
                     SegmentRow(seg, plot, seg.segmentId == state.selectedId) { onSelect(seg.segmentId) }
@@ -110,6 +113,10 @@ private fun SessionPlot(plot: PlotData, segments: List<ResolvedSegment>, selecte
             val x1 = plot.timeToFraction(seg.tEndNs).coerceIn(0f, 1f) * size.width
             val c = overlayColor(seg.kind)
             drawRect(c.copy(alpha = if (seg.implicit) 0.12f else 0.25f), Offset(x0, 0f), androidx.compose.ui.geometry.Size(x1 - x0, size.height))
+            if (LabelEditor.isUnconfirmed(seg)) {
+                // orange bar along the top edge of the overlay marks an unconfirmed set
+                drawRect(UNCONFIRMED_COLOR, Offset(x0, 0f), androidx.compose.ui.geometry.Size(x1 - x0, 8f))
+            }
             if (seg.segmentId == selectedId) {
                 drawRect(c, Offset(x0, 0f), androidx.compose.ui.geometry.Size(x1 - x0, size.height), style = Stroke(3f))
             }
@@ -153,6 +160,18 @@ private fun SegmentRow(seg: ResolvedSegment, plot: PlotData, selected: Boolean, 
         Column(Modifier.padding(12.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text("${secs(plot, seg.tStartNs)} to ${secs(plot, seg.tEndNs)}", style = MaterialTheme.typography.bodySmall)
+            if (seg.note == LabelEditor.DISCARDED_NOTE) {
+                Text("discarded", Modifier.testTag("discarded_${seg.segmentId}"), style = MaterialTheme.typography.labelMedium)
+            }
+            if (LabelEditor.isUnconfirmed(seg)) {
+                AssistChip(
+                    onClick = onClick,
+                    label = { Text("unconfirmed") },
+                    colors = AssistChipDefaults.assistChipColors(labelColor = UNCONFIRMED_COLOR),
+                    border = AssistChipDefaults.assistChipBorder(true, borderColor = UNCONFIRMED_COLOR),
+                    modifier = Modifier.testTag("unconfirmed_${seg.segmentId}"),
+                )
+            }
         }
     }
 }

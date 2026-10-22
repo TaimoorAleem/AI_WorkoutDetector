@@ -44,6 +44,19 @@ object LabelEditor {
         return put(labels, transform(current))
     }
 
+    /** Note value that marks a discarded (accidental) segment; see the mobile README. */
+    const val DISCARDED_NOTE = "discarded"
+
+    /** Turns [label] into a discarded segment: kind `other`, note [DISCARDED_NOTE], no set-only fields. */
+    fun discard(label: SegmentLabel): SegmentLabel = label.copy(
+        kind = SegmentKind.OTHER, exercise = null, loadKg = null, category = null, repsUser = null, rpe = null,
+        note = DISCARDED_NOTE,
+    )
+
+    /** A set without a user rep count: its exercise/load were only the phone's guess at press time. */
+    fun isUnconfirmed(seg: dev.proprio.protocol.ResolvedSegment): Boolean =
+        !seg.implicit && seg.kind == SegmentKind.SET && seg.repsUser == null
+
     /** Applies a review-screen edit, keeping any time overrides. Exercise/category/load only apply to sets. */
     fun applyEdit(labels: Labels, segmentId: Int, edit: SegmentEdit): Labels =
         update(labels, segmentId, edit.kind) {

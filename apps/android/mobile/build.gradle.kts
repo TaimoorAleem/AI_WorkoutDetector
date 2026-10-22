@@ -54,6 +54,8 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.activity.compose)
     implementation(libs.play.services.wearable)
+    implementation(libs.wear.remote.interactions)
+    implementation(libs.concurrent.futures.ktx)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)

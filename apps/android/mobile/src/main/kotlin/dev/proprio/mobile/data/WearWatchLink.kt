@@ -1,6 +1,10 @@
 package dev.proprio.mobile.data
 
 import android.content.Context
+import android.content.Intent
+import androidx.concurrent.futures.await
+import androidx.wear.remote.interactions.RemoteActivityHelper
+import kotlinx.coroutines.asExecutor
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.Node
@@ -69,6 +73,20 @@ class WearWatchLink(private val context: Context) : WatchLink {
         val best = nodes.firstOrNull { it.isNearby } ?: nodes.firstOrNull()
         nodeId = best?.id
         _connected.value = best != null
+    }
+
+    override suspend fun launchWatchApp(kind: SessionKind, participantId: String?): Boolean {
+        if (nodeId == null) refresh()
+        val target = nodeId ?: return false
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW)
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+                .setData(WatchLaunch.uri(kind, participantId))
+            RemoteActivityHelper(context, Dispatchers.IO.asExecutor()).startRemoteActivity(intent, target).await()
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     override suspend fun startSession(kind: SessionKind, participantId: String?): Boolean =
