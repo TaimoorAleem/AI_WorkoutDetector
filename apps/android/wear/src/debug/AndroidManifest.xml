@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: adb-driven session control for device tests (see wear/README.md). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name="dev.proprio.wear.debug.DebugCommandReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.proprio.debug.SESSION_START" />
+                <action android:name="dev.proprio.debug.SESSION_END" />
+                <action android:name="dev.proprio.debug.SEGMENT_START" />
+                <action android:name="dev.proprio.debug.SEGMENT_STOP" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

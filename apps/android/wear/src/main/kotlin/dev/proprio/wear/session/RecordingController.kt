@@ -93,6 +93,8 @@ class RecordingController(
     private val statusIntervalMs: Long = STATUS_INTERVAL_MS,
     private val retryBackoffMs: List<Long> = listOf(15_000, 30_000, 60_000, 120_000, 300_000),
     private val calibrationSteps: List<CalibrationStep> = CalibrationSequencer.DEFAULT_STEPS,
+    private val exercise: ExerciseHost = NoExercise,
+    private val strategy: () -> Strategy = { Strategy.NONE },
 ) {
     private val mutex = Mutex()
     private val _state = MutableStateFlow(UiState())
@@ -105,6 +107,7 @@ class RecordingController(
     private var sequencer: CalibrationSequencer? = null
     private var lastStatusMs = 0L
     private var retryJob: Job? = null
+    private var exerciseActive = false
 
     private val recording get() = sessionId != null
 
@@ -138,6 +141,11 @@ class RecordingController(
             null
         }
         lastStatusMs = nowMs()
+        val s = strategy()
+        if (s.exercise) {
+            exerciseActive = startExerciseSafely()
+            log("health services exercise ${if (exerciseActive) "started" else "NOT started"} (strategy ${s.id})")
+        }
         log("session $id started (${source.name.lowercase()}, ${kind.name.lowercase()})")
         publish(message = null)
         scope.launch { tickLoop(id) }
@@ -173,7 +181,13 @@ class RecordingController(
 
     /** App start / capability change: zip crash leftovers and resend everything pending. */
     suspend fun resumeTransfers() {
-        mutex.withLock { if (!recording) transfer.recoverOrphans() }
+        mutex.withLock {
+            if (!recording) {
+                transfer.recoverOrphans()
+                // A process killed mid-session leaves its Health Services exercise running: end it.
+                stopExerciseSafely()
+            }
+        }
         publish()
         if (transfer.pendingSessionIds().isNotEmpty()) scheduleRetry(listOf(0L) + retryBackoffMs)
     }
@@ -215,11 +229,32 @@ class RecordingController(
             runCatching { transfer.prepare(id0) } // the files are readable even if incomplete
         }
         kind = null
+        if (exerciseActive) {
+            exerciseActive = false
+            stopExerciseSafely()
+        }
         host.exitForeground()
         log("session $id0 ended (${source.name.lowercase()})")
         publish()
         scheduleRetry(listOf(0L) + retryBackoffMs)
         return true
+    }
+
+    private suspend fun startExerciseSafely(): Boolean = try {
+        exercise.start()
+    } catch (e: Exception) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
+        log("exercise start failed: $e")
+        false
+    }
+
+    private suspend fun stopExerciseSafely() {
+        try {
+            exercise.stop()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            log("exercise stop failed: $e")
+        }
     }
 
     private fun scheduleRetry(delays: List<Long>) {

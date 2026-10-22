@@ -50,6 +50,12 @@ class TransferManager(
     private val _sending = MutableStateFlow(false)
     val sending: StateFlow<Boolean> = _sending
 
+    /**
+     * When true, an acked zip is renamed to `<name>.zip.kept` instead of deleted. Only the debug-only test
+     * receiver sets it; production code never does.
+     */
+    @Volatile var keepAckedZips = false
+
     init {
         refresh()
     }
@@ -133,13 +139,20 @@ class TransferManager(
             log("ack for ${ack.sessionId} rejected (ok=${ack.ok}, hash match=${mine.equals(ack.sha256, true)}); keeping zip")
             return AckResult.KEPT_RETRY
         }
-        zip.delete()
+        if (keepAckedZips) {
+            // Device tests only: the zip stays in the outbox (no longer pending) so it can be pulled with adb.
+            check(zip.renameTo(File(outboxDir, zip.name + KEPT_SUFFIX))) { "cannot keep $zip" }
+        } else {
+            zip.delete()
+        }
         sessionDir(ack.sessionId).deleteRecursively()
         refresh()
         return AckResult.DELETED
     }
 
     companion object {
+        const val KEPT_SUFFIX = ".kept"
+
         fun sha256(file: File): String {
             val md = MessageDigest.getInstance("SHA-256")
             file.inputStream().use { input ->
