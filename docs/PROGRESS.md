@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 1: CSF-1 normalization layer (Phase 0 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Phase 1: orchestrator writes `docs/sensor_spec.md` (§6.2 table, CSF-1, profile schema, fake-watch generator and rotation-sensitivity test design). Then Sonnet tasks in parallel: `sensors/` + tests ‖ fake-watch generator + rotation sensitivity.
+- **Next step:** Phase 1 tasks S1 (`sensors/` package + pipeline rewire) ‖ S2a (rotation sensitivity), per `docs/sensor_spec.md` §8. Then S2b (fake-watch round trip), then orchestrator §7.3 decision.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`)
@@ -19,7 +19,6 @@
 ## Blockers / open questions
 - Rep counter fails every §6.5 rep gate on its own (training) data after cleaning: MAE 1.05, exact 40%, ±1 81%, OHP MAE 1.90. Optimistic (cutoffs tuned on this data; expected reps assumed). Phase 4 rework is mandatory.
 - Classifier is orientation-dependent (temporal stats on raw axes); bench/OHP differ by ~0.13 g on x only. Phase 1 rotation-sensitivity test decides whether robust features are needed before watch data.
-- CI not yet exercised on GitHub (nothing pushed; owner decides when to push).
 
 ## Phase checklists
 
@@ -34,10 +33,11 @@
 - [x] [O] 0.5 Review: `docs/reports/phase0-baseline-review.md`. Honest baseline: NN on temporal features, LOPO window acc 0.963±0.047, macro-F1 0.957±0.054, set acc 0.963±0.052 (was 0.9994 with leaks). Found 23 duplicate raw files (D-016).
 
 ### Phase 1: CSF-1 normalization layer
-- [ ] [O] `docs/sensor_spec.md` (the §6.2 table, CSF-1, profile schema)
-- [ ] [S] `sensors/` + tests ‖ [S] synthetic fake-watch generator + round-trip test
-- [ ] [S] Rotation-sensitivity test: best model's set accuracy and bench/OHP confusion vs rotation error (2°, 5°, 10°, 20° per axis); [O] decide on robust features
-- [ ] [S] Rewire pipeline onto CSF; regression test vs legacy loader
+- [x] [O] `docs/sensor_spec.md`: CSF-1, conversion steps, profiles, fake-watch generator, tests, analyses, decision rule
+- [ ] [S] S1 `sensors/` package + tests; rewire pipeline onto `to_csf`; regression (metrics unchanged)
+- [ ] [S] S2a ‖ Rotation sensitivity (§7.2) with reference curves R1 (magnitude-only) and R2 (rotation augmentation)
+- [ ] [S] S2b Fake-watch generator + round-trip test + model-level round trip (§7.1), after S1
+- [ ] [O] §7.3 decision: θ_tol, residual gate, robust features or augmentation
 
 ### Phase 2: Wear OS + phone recorder
 - [ ] [O] `:protocol` (Raw Format v1, meta.json schema, Data Layer messages)
@@ -77,6 +77,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: Pushed `dev`; first GitHub CI run green. Owner approved merging `dev` → `main` (fast-forward to `f8b4e77`) and pushing. Phase 1 spec written (`docs/sensor_spec.md`).
 - 2026-10-22: Phase 0 complete. 0.4b merged; clean rerun on `dev` reproduced metrics exactly (MLflow parent `f5231a5df0974e1e94a80b04f2cfe6b6`). Orchestrator review written; D-016 (duplicate raw files); PROJECT.md §6.1 corrected; Phase 1 gains a rotation-sensitivity test.
 - 2026-10-22: 0.2 (rep counter library) and 0.3 (CI + cross-platform locks) merged into `dev`; 0.4 spec written.
 - 2026-10-22: 0.1 merged into `dev`. Leaky baseline (random 80/20 row split, `duration` feature): best = decision tree on 10 selected features, accuracy 0.9994 / F1 0.9994. This number is NOT trustworthy; 0.4 replaces it with LOPO. Runtime ~35 min, dominated by forward selection (~25 min).
