@@ -16,6 +16,9 @@ import dev.proprio.protocol.MarkKind
 import dev.proprio.protocol.SegmentSource
 import dev.proprio.protocol.SessionKind
 import dev.proprio.wear.ui.WatchScreen
+import dev.proprio.wear.platform.appLog
+import dev.proprio.wear.session.keepScreenOn
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
@@ -23,6 +26,10 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var ambient by mutableStateOf(false)
+
+    private companion object {
+        const val MIN_BRIGHTNESS = 0.01f
+    }
 
     private val ambientCallback = object : AmbientLifecycleObserver.AmbientLifecycleCallback {
         override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
@@ -32,6 +39,15 @@ class MainActivity : ComponentActivity() {
         override fun onExitAmbient() {
             ambient = false
         }
+    }
+
+    private fun applyScreenOn(on: Boolean) {
+        val flag = android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        if (on) window.addFlags(flag) else window.clearFlags(flag)
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (on) MIN_BRIGHTNESS else android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        appLog("screen_on ${if (on) "held (min brightness)" else "released"}")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,6 +75,14 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             graph.strategy.changes.map { it.ambient }.distinctUntilChanged().drop(1).collect { recreate() }
+        }
+
+        // Strategy "screen_on": while recording keep this activity on screen (TOP processes are not frozen),
+        // at minimum brightness; both are reset when the session ends or the strategy changes.
+        lifecycleScope.launch {
+            combine(graph.strategy.changes, c.state.map { it.recording }.distinctUntilChanged(), ::keepScreenOn)
+                .distinctUntilChanged()
+                .collect { on -> applyScreenOn(on) }
         }
 
         setContent {

@@ -39,7 +39,8 @@ screen turns off, and disables our partial wake lock, even with a `health` foreg
 | `ongoing` | Attaches a Wear OS **Ongoing Activity** (`androidx.wear:wear-ongoing`) to the recording notification: category workout, touch intent = open the app, status text = elapsed time. Shows the app as a chip on the watch face / launcher. | https://developer.android.com/training/wearables/ongoing-activity |
 | `ambient` | `MainActivity` registers an `AmbientLifecycleObserver` (`androidx.wear:wear`) so the recording screen stays the top activity in ambient mode instead of being backgrounded when the screen dims; the ambient face is a black, dim timer. No `FLAG_KEEP_SCREEN_ON`. **Only effective when the watch's Always-on display setting is on** (see results). | https://developer.android.com/training/wearables/apps/always-on |
 | `exercise` | Starts a **Health Services** exercise (`ExerciseType.STRENGTH_TRAINING`, no data types, no GPS, no auto-pause) for the whole session and ends it on session end and on app start (crash recovery). | https://developer.android.com/health-and-fitness/health-services/active-data |
-| `all` | All three. | |
+| `screen_on` | While recording, `MainActivity` holds `FLAG_KEEP_SCREEN_ON` with window brightness 0.01, so the app stays the TOP activity (hypothesis: Freecess does not freeze TOP). Cleared at session end. | https://developer.android.com/training/scheduling/wakelock#screen |
+| `all` | All four. | |
 
 The strategy lives in memory (`StrategyHolder`, default `all`); only the debug receiver below changes it.
 
@@ -81,7 +82,16 @@ Procedure per strategy: force-stop, open the app, `SESSION_START`, `KEYCODE_SLEE
 | exercise (started and ACTIVE) | 603 | 3.2 Hz | 1 | 178.4 s | 1 (after ~8 s) | 0 |
 | all | 611 | 49.8 Hz over only 12.3 s | 0 reported, but the zip covers 12 s of 180 s | the tail (~167 s, never delivered before the session ended) is not counted by the tool | 1 (after ~12 s) | 0 |
 
-**Result: no strategy prevented the freeze on the charger.** Every run was frozen (`FZ : dev.proprio(10043), reason: LEV`) 8-12 s after the session started (about 5 s after screen-off)
+Second round (same watch, still on the charger, **no `KEYCODE_SLEEP`**, 180 s, screen held on at brightness 0.01 by the recording activity):
+
+| strategy | samples (acc) | effective rate (over 181.6 / 185.7 s) | gaps > 100 ms | max gap | `FZ` events | process state while recording |
+|---|---|---|---|---|---|---|
+| screen_on | 9042 | 49.8 Hz | 0 | 20.1 ms | 0 | `TOP` (procState 2), `mWakefulness=Awake`, focus = `MainActivity` |
+| all | 9250 | 49.8 Hz | 0 | 20.1 ms | 0 | `TOP` |
+
+Keeping the recording activity on top (screen on) is what prevents the freeze; the first-round result below stands for the screen-off cases.
+
+**Result (first round, screen off): no strategy prevented the freeze on the charger.** Every run was frozen (`FZ : dev.proprio(10043), reason: LEV`) 8-12 s after the session started (about 5 s after screen-off)
 and thawed only when the end-of-session broadcast ran (`UFZ ... reason: broadcast`), with the partial wake
 lock `DISABLED` in between. The process state at that time was `FGS` (procState 4), so Freecess freezes foreground-service
 processes on this firmware. Observations that limit the conclusions:
