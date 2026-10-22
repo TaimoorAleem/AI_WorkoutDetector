@@ -67,6 +67,9 @@ EVAL_CONFIG = {
     "random_state": 42,
     "inner_cv_splits": 4,  # GroupKFold, only used by --tune / --forward-selection
     "selection_metric": "lopo_window_macro_f1_mean",  # tiebreak: lopo_set_acc_mean
+    # D-018: training-time rotation augmentation (training participants only, never test data).
+    # The seed is the one the R2w8 sensitivity study used (AUG_SEED in analysis/).
+    "augmentation": {"enabled": True, "copies": 8, "max_deg": 30.0, "seed": 20240612},
 }
 
 # MLflow tracking
@@ -74,7 +77,7 @@ MLFLOW_EXPERIMENT = "proprio-classifier"
 MLFLOW_DEFAULT_DB = PROJECT_ROOT / "mlflow.db"
 MLFLOW_ARTIFACT_ROOT = PROJECT_ROOT / "mlartifacts"
 DVC_DATA_FILE = DATA_DIR / "raw" / "MetaMotion.dvc"
-REPORT_PATH = PROJECT_ROOT / "docs" / "reports" / "phase0-baseline.md"
+REPORT_PATH = PROJECT_ROOT / "docs" / "reports" / "current-baseline.md"
 
 # Plotting configuration
 PLOT_CONFIG = {"style": "fivethirtyeight", "figure_size": (20, 5), "dpi": 100, "line_width": 2}
