@@ -4,9 +4,9 @@
 > Scope and specs live in [`PROJECT.md`](PROJECT.md), decisions in [`DECISIONS.md`](DECISIONS.md).
 
 ## Now
-- **Current phase:** Phase 2: Wear OS + phone recorder (Phases 0 and 1 complete)
+- **Current phase:** Phase 3: calibration + domain shift (Phases 0–2 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** P2c small UX fixes (watch button debounce, discard prompt for segments < 3 s, unconfirmed-label marking) ‖ P4 (Android CI). Then owner task U1 (calibration recording).
+- **Next step:** Owner task U1 (calibration recording, ~20 min at home). In parallel, orchestrator writes the Phase 3 analysis spec (R fit, profile, domain-shift report). First GitHub run of `android-ci` once `dev` is pushed.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
@@ -20,7 +20,8 @@
 ## Blockers / open questions
 - Resolved (D-024): Samsung Freecess. Keeping the recording screen on (dimmed) keeps the process TOP; verified on the wrist with 0 gaps.
 - Resolved: watch-started sets now ask the phone user to confirm the exercise.
-- Open: accidental short watch segments (2.7 s and 0.7 s) appeared in the wrist test and inherited a label without reps. Fix in P2c.
+- Resolved (P2c): watch tap debounce (1 s), discard prompt for segments < 3 s (note `"discarded"`, skipped by the Python reader), unconfirmed labels marked in Review.
+- Resolved (P2c): a phone-started session now opens the watch app remotely (`RemoteActivityHelper`) and starts it from the foreground. Verified on device with the watch app closed.
 - Rep counter fails every §6.5 rep gate on its own (training) data after cleaning: MAE 1.05, exact 40%, ±1 81%, OHP MAE 1.90. Optimistic (cutoffs tuned on this data; expected reps assumed). Phase 4 rework is mandatory.
 - Resolved (D-018): the baseline tolerated only 2° of misalignment; rotation augmentation (≤30°, K=8) raises it to 10°. Now the default training regime (A1).
 - Resolved (D-021): temporal/KNN with augmentation tolerates 15° (NN 10°), and is the production candidate. RF scores 0° only because one set flips at 2°; the 2 pp set-accuracy limit is finer than one set in a small fold.
@@ -57,8 +58,10 @@
 - [x] [U] First device smoke test: transfer, hash ack and label binding work end to end. Watch timing: 49.8 Hz, p50 20.08 ms, p99 20.11 ms (≈0.03 ms jitter), acc-gyr offset 0–20 ms, drift < 1 ms; LSM6DSO sensors selected; accelerometer range ±8 g
 - [x] [S] P2b Debug adb test hook, anti-freeze strategies (ongoing, ambient, exercise, screen_on), watch-started set exercise prompt. Device matrix: only `screen_on` works (0 gaps, process TOP)
 - [x] [U] Wrist test with `screen_on`: 289.7 s, 49.85 Hz, 0 gaps > 100 ms, max 20.2 ms, 0 freezes during session; squat label confirmed correctly
-- [ ] [S] P2c UX fixes: watch button debounce, discard prompt for < 3 s segments, unconfirmed-label marking in Review
-- [ ] [U] Optional: enable Always-on display so `ambient` (more battery-friendly) can be tested
+- [x] [S] P2c UX fixes + black recording screen + remote watch launch; device test: remote start works, 0 gaps over 148 s, discard recorded
+- [x] [O] Readable recording screen: removed the 0.01 brightness override and dim text (owner: barely readable); battery tuning deferred to pre-launch (D-025)
+- [x] [S] P4 `android-ci.yml` (tests, both APKs, lint 0 errors), verified in a Linux Android-SDK container; `gradlew` made executable; not yet run on GitHub
+- [ ] [U] Optional, pre-launch: enable Always-on display so `ambient` (more battery-friendly) can be tested
 
 ### Phase 3: calibration + domain shift
 - [ ] [U] U1, U2 (×2), U3
@@ -92,6 +95,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: Phase 2 complete. P2c and P4 merged; remote launch verified on device; dimming removed at owner's request (D-025).
 - 2026-10-22: Freecess solved by keeping the dimmed recording screen on (D-024), verified on the wrist. Health Services exercise, Ongoing Activity and ambient (with AOD off) did not prevent the freeze. U1–U3 unblocked once P2c lands.
 - 2026-10-22: First real-device tests. Fixed the Data Layer: both apps now share `applicationId` dev.proprio (D-022). Recording works, but Samsung Freecess freezes the watch app (D-023); allow-listing didn't help and was reverted.
 - 2026-10-22: P2, P3 and the KNN/RF sensitivity follow-up merged. Watch and phone paired over adb Wi-Fi; both apps installed; first end-to-end smoke test in progress.

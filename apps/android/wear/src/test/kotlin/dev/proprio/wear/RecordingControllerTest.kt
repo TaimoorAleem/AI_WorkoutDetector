@@ -368,9 +368,9 @@ class RecordingControllerTest {
     fun recordingStateSelectsTheBlackPalette() {
         val rec = dev.proprio.wear.ui.watchPalette(dev.proprio.wear.session.UiState(recording = true))
         assertEquals(androidx.compose.ui.graphics.Color(0xFF000000), rec.background)
-        assertEquals(androidx.compose.ui.graphics.Color(0xFF5A5A5A), rec.content)
+        // Readable text while recording (dim text at minimum brightness was barely legible on the device)
+        assertTrue(rec.content.red > 0.8f && rec.content.green > 0.8f && rec.content.blue > 0.8f)
         val idle = dev.proprio.wear.ui.watchPalette(dev.proprio.wear.session.UiState())
         assertEquals(androidx.compose.ui.graphics.Color(0xFF000000), idle.background)
-        assertTrue(idle.content != rec.content)
     }
 }
