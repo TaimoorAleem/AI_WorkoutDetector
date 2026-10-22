@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 0: hygiene and honest baseline
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Phase 0 task 0.1: restructure `src/` into the `ml/workout_ml` package (Python 3.11, locked requirements, DVC with a local remote).
+- **Next step:** finish verifying 0.1 on `feature/phase0-package` (code reviewed: no logic changes; tests and ruff pass). Rerun `python -m workout_ml.pipeline` in env `proprio`; the last run was killed for low memory after forward selection (~31 min) succeeded. If it completes, merge into `dev`. Then 0.2/0.3 in parallel. MLflow adoption: update PROJECT.md/DECISIONS.md (tracking + registry + RAG eval; see session log).
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`)
@@ -73,4 +73,5 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: 0.1 reviewed (AST-identical except config/pipeline). Fixed pandas 3 Arrow-string incompatibility in LearningAlgorithms (`.to_numpy()`). Owner requested MLflow: experiment tracking (Phase 0+), model registry with aliases candidate/production for CI gate and inference-svc (Phases 4-5), mlflow.evaluate for RAG golden set (Phase 6), server on Code Engine with Postgres backend + COS artifacts (Phase 7). Docs not yet updated for MLflow. Known: `duration` was selected by forward selection, confirming the leakage defect.
 - 2026-10-21: Session `proprio-planning`. Analyzed the codebase and raw data, wrote the plan, collected decisions D-001–D-014, cleaned up and committed the baseline to main, created `dev`, and added the context docs.
