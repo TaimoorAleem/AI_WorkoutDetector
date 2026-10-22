@@ -1,9 +1,8 @@
 import numpy as np
-import scipy.stats as stats
+
 
 # Class to abstract a history of numerical values we can use as an attribute.
 class NumericalAbstraction:
-
     # This function aggregates a list of values using the specified aggregation
     def aggregate_value(self, aggregation_function):
         # Compute the values and return the result.
@@ -25,9 +24,7 @@ class NumericalAbstraction:
 
         # Create new columns for the temporal data, pass over the dataset and compute values
         for col in cols:
-            data_table[
-                col + "_temp_" + aggregation_function + "_ws_" + str(window_size)
-            ] = (
+            data_table[col + "_temp_" + aggregation_function + "_ws_" + str(window_size)] = (
                 data_table[col]
                 .rolling(window_size)
                 .apply(self.aggregate_value(aggregation_function))

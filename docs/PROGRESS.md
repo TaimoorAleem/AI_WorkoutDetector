@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 0: hygiene and honest baseline
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Phase 0 task 0.1: restructure `src/` into the `ml/workout_ml` package (Python 3.11, locked requirements, DVC with a local remote).
+- **Next step:** Phase 0 tasks 0.2 (rep counter as a library) and 0.3 (GitHub Actions: ruff + pytest) in parallel, each on its own `feature/*` branch off `dev`. Then 0.4 (leakage fixes + MLflow tracking).
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`)
@@ -24,7 +24,7 @@
 ### Phase 0: hygiene and honest baseline
 - [x] [O] Review WIP diff, clean legacy files, commit baseline to main (`ca6f57f`), create `dev`
 - [x] [O] Project context docs: CLAUDE.md, PROJECT.md, PROGRESS.md, DECISIONS.md
-- [ ] [S] 0.1 Restructure into `ml/workout_ml` package; Python 3.11; complete, locked requirements; DVC with local remote
+- [x] [S] 0.1 Restructure into `ml/workout_ml` package; Python 3.11; complete, locked requirements (incl. MLflow); DVC with local remote. Fixed pre-existing bugs found by the first end-to-end run: pandas 3 Arrow-string labels, blocking `plt.show()`, NaN rows from window features, short model names in `train_single_model`.
 - [ ] [S] 0.2 ‖ Rep counter as a pure function `reps.count(df, exercise, cfg)` with cutoffs in config, plus pytest
 - [ ] [S] 0.3 ‖ GitHub Actions: ruff + pytest
 - [ ] [O] 0.4 Leakage-fix spec → [S] implement: per-set filtering/rolling/FFT, outliers → NaN + per-set interpolation, PCA/scaler fitted in folds, drop `duration`, LOPO CV, set-level majority vote
@@ -73,4 +73,6 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: 0.1 merged into `dev`. Leaky baseline (random 80/20 row split, `duration` feature): best = decision tree on 10 selected features, accuracy 0.9994 / F1 0.9994. This number is NOT trustworthy; 0.4 replaces it with LOPO. Runtime ~35 min, dominated by forward selection (~25 min).
+- 2026-10-22: 0.1 reviewed (AST-identical except config/pipeline). Fixed pandas 3 Arrow-string incompatibility in LearningAlgorithms (`.to_numpy()`). Owner requested MLflow: experiment tracking (Phase 0+), model registry with aliases candidate/production for CI gate and inference-svc (Phases 4-5), mlflow.evaluate for RAG golden set (Phase 6), server on Code Engine with Postgres backend + COS artifacts (Phase 7). Docs not yet updated for MLflow. Known: `duration` was selected by forward selection, confirming the leakage defect.
 - 2026-10-21: Session `proprio-planning`. Analyzed the codebase and raw data, wrote the plan, collected decisions D-001–D-014, cleaned up and committed the baseline to main, created `dev`, and added the context docs.

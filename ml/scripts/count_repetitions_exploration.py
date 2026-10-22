@@ -1,11 +1,11 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from DataTransformation import LowPassFilter
 from scipy.signal import argrelextrema
 from sklearn.metrics import mean_absolute_error
 
-from src import data
+from workout_ml import config
+from workout_ml.features.DataTransformation import LowPassFilter
 
 pd.options.mode.chained_assignment = None
 
@@ -16,11 +16,11 @@ plt.rcParams["figure.figsize"] = (20, 5)
 plt.rcParams["figure.dpi"] = 100
 plt.rcParams["lines.linewidth"] = 2
 
-df = pd.read_pickle("../../data/interim/01_data_processed.pkl")
+df = pd.read_pickle(config.INTERIM_DATA_PATH / "01_data_processed.pkl")
 df = df[df["label"] != "rest"]
 
-acc_r = np.sqrt(df["acc_x"]**2 + df["acc_y"]**2 + df["acc_z"]**2)
-gyr_r = np.sqrt(df["gyr_x"]**2 + df["gyr_y"]**2 + df["gyr_z"]**2)
+acc_r = np.sqrt(df["acc_x"] ** 2 + df["acc_y"] ** 2 + df["acc_z"] ** 2)
+gyr_r = np.sqrt(df["gyr_x"] ** 2 + df["gyr_y"] ** 2 + df["gyr_z"] ** 2)
 
 df["acc_r"] = acc_r
 df["gyr_r"] = gyr_r
@@ -62,10 +62,11 @@ bench_set_1["acc_r"].plot()
 
 column = "acc_r"
 LowPass.low_pass_filter(
-    dead_set_1, col = column, sampling_frequency=fs, cutoff_frequency=0.4, order=5
+    dead_set_1, col=column, sampling_frequency=fs, cutoff_frequency=0.4, order=5
 )[column + "_lowpass"].plot()
 
 # cutoff = 0.4 seems appropriate for all exercises except for row (0.6)
+
 
 # Creating function to count repetitions using the local minima and maxima of the low pass filtered signal. We will use the acc_r signal for this, as it seems to be the most informative.
 def count_repetitions(dataset, column="acc_r", cutoff_frequency=0.4, order=10):
@@ -74,7 +75,7 @@ def count_repetitions(dataset, column="acc_r", cutoff_frequency=0.4, order=10):
     )
     indexes = argrelextrema(data[column + "_lowpass"].values, np.greater)
     peaks = data.iloc[indexes]
-    
+
     fig, ax = plt.subplots()
     plt.plot(dataset[f"{column}_lowpass"])
     plt.plot(peaks[f"{column}_lowpass"], "o", color="red")
@@ -83,8 +84,9 @@ def count_repetitions(dataset, column="acc_r", cutoff_frequency=0.4, order=10):
     category = dataset["category"].iloc[0].title()
     plt.title(f"{category} - {exercise}: {len(peaks)} Repetitions")
     plt.show()
-    
+
     return len(peaks)
+
 
 count_repetitions(bench_set_1, cutoff_frequency=0.4)
 count_repetitions(squat_set_1, cutoff_frequency=0.35)
@@ -100,7 +102,7 @@ rep_df["predicted_reps"] = 0
 
 for s in df["set"].unique():
     subset = df[df["set"] == s]
-    
+
     column = "acc_r"
     cutoff = 0.4
     if subset["label"].iloc[0] == "row":
@@ -110,11 +112,11 @@ for s in df["set"].unique():
         cutoff = 0.35
     elif subset["label"].iloc[0] == "ohp":
         cutoff = 0.35
-        
+
     reps = count_repetitions(subset, column=column, cutoff_frequency=cutoff)
-    
+
     rep_df.loc[rep_df["set"] == s, "predicted_reps"] = reps
-    
+
 rep_df
 
 error = mean_absolute_error(rep_df["reps"], rep_df["predicted_reps"]).round(2)
