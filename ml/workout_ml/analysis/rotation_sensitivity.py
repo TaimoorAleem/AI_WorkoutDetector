@@ -10,8 +10,12 @@ Variants:
 - ``R2``, ``R2w``, ``R2w8``: baseline features and model, training sets = originals plus K
   randomly rotated copies (K=4/4/8, max angle 15/30/30 deg)
 
+The model is a parameter (``--models``, default NN); results are cached per (model, variant).
+Variant R1 (magnitude features) is defined for any model but is only computed on request.
+
 Usage:
-    python -m workout_ml.analysis.rotation_sensitivity [--tracking-uri URI] [--no-mlflow]
+    python -m workout_ml.analysis.rotation_sensitivity [--models NN KNN RF]
+        [--variants baseline R2w8] [--tracking-uri URI] [--no-mlflow]
 """
 
 from __future__ import annotations
@@ -71,7 +75,8 @@ SIGNED_AXES = {
 }
 VARIANTS = ("baseline", "R1", "R2", "R2w", "R2w8")
 BASELINE_SET = "basic+derived+pca+temporal"
-MODEL = "NN"
+MODEL = "NN"  # default model; every (model, variant) pair is a separate cached result
+DEFAULT_MODELS = ("NN",)
 # section 7.3 tolerances (percentage points, expressed as fractions)
 TOL_SET_ACC = 0.02
 TOL_RECALL = 0.05
@@ -193,7 +198,9 @@ def fold_row(variant, theta, axis, participant, y, pred, sets, classes):
 
 def aggregate(folds):
     """Per (variant, theta, axis): mean over folds (NaN-aware) + pooled bench/OHP confusion."""
-    keys = ["variant", "theta", "axis"]
+    if "model" not in folds.columns:  # caches written before the model parameter existed
+        folds = folds.assign(model=MODEL)
+    keys = ["model", "variant", "theta", "axis"]
     mean_cols = ["set_acc", "window_macro_f1", "window_acc", "recall_bench", "recall_ohp"]
     agg = folds.groupby(keys, sort=False)[mean_cols].mean()
     sums = folds.groupby(keys, sort=False)[
@@ -206,7 +213,7 @@ def aggregate(folds):
 
 
 # --------------------------------------------------------------------------- theta_tol
-def theta_tol(table, variant, axes=None):
+def theta_tol(table, variant, axes=None, model=None):
     """Largest theta whose worst-axis drops vs theta=0 are within the section 7.3 limits.
 
     ``table``: aggregated frame (columns variant, theta, axis, set_acc, recall_bench,
@@ -215,6 +222,8 @@ def theta_tol(table, variant, axes=None):
     axis present for theta > 0. Returns 0 if no theta > 0 passes.
     """
     t = table[table["variant"] == variant]
+    if model is not None and "model" in table.columns:
+        t = t[t["model"] == model]
     base = t[t["theta"] == 0].iloc[0]
     best = 0.0
     eps = 1e-9
@@ -235,8 +244,10 @@ def theta_tol(table, variant, axes=None):
 
 
 # --------------------------------------------------------------------------- main analysis
-def run_analysis(cleaned, n_jobs=-1, variants=VARIANTS):
-    """Fold-level rows for the requested ``variants`` only."""
+def run_analysis(cleaned, n_jobs=-1, combos=None):
+    """Fold-level rows for the requested (model, variant) ``combos`` only."""
+    combos = list(combos if combos is not None else [(MODEL, v) for v in VARIANTS])
+    variants = {v for _, v in combos}
     classes = sorted(cleaned["label"].unique())
     conditions = build_conditions()
     participants = sorted(cleaned["participant"].unique())
@@ -272,37 +283,49 @@ def run_analysis(cleaned, n_jobs=-1, variants=VARIANTS):
         train0 = feat0[feat0["participant"] != p]
         logger.info("Fold: held-out %s", p)
         models = {}
-        if "baseline" in variants:
-            models["baseline"] = lopo.build_pipeline(base_fs, MODEL).fit(
-                train0[list(base_fs.columns)], train0["label"]
-            )
-        if "R1" in variants:
-            models["R1"] = lopo.build_pipeline(mag_fs, MODEL).fit(
-                train0[list(mag_fs.columns)], train0["label"]
-            )
-        for v, copies in aug.items():
-            train2 = pd.concat([train0, copies[copies["participant"] != p]])
-            models[v] = lopo.build_pipeline(base_fs, MODEL).fit(
-                train2[list(base_fs.columns)], train2["label"]
+        for model_name, v in combos:
+            if v == "baseline":
+                train, fs = train0, base_fs
+            elif v == "R1":
+                train, fs = train0, mag_fs
+            else:
+                copies = aug[v]
+                train, fs = pd.concat([train0, copies[copies["participant"] != p]]), base_fs
+            models[(model_name, v)] = lopo.build_pipeline(fs, model_name).fit(
+                train[list(fs.columns)], train["label"]
             )
         for theta, axis, _ in conditions:
             ft = test_feats[(p, theta, axis)]
             y = ft["label"].to_numpy()
             sets = ft["set"].to_numpy()
-            for variant, model in models.items():
+            for (model_name, variant), model in models.items():
                 fs = mag_fs if variant == "R1" else base_fs
                 pred = np.asarray(model.predict(ft[list(fs.columns)]))
-                rows.append(fold_row(variant, theta, axis, p, y, pred, sets, classes))
+                row = fold_row(variant, theta, axis, p, y, pred, sets, classes)
+                rows.append({"model": model_name, **row})
     return pd.DataFrame(rows)
 
 
 # --------------------------------------------------------------------------- reporting
+MODEL_ORDER = ("NN", "KNN", "RF", "DT", "NB")
+
+
+def combos_in(table):
+    """(model, variant) pairs present in ``table``: models in MODEL_ORDER, variants in VARIANTS."""
+    present = set(zip(table["model"], table["variant"], strict=True))
+    models = sorted(
+        {m for m, _ in present},
+        key=lambda m: (MODEL_ORDER.index(m), m) if m in MODEL_ORDER else (len(MODEL_ORDER), m),
+    )
+    return [(m, v) for m in models for v in VARIANTS if (m, v) in present]
+
+
 def summarize_tables(table):
-    """Per variant: worst-signed-axis rows and random-axis means, per theta."""
+    """Per (model, variant): worst-signed-axis rows and random-axis means, per theta."""
     out = {}
     thetas = sorted(table["theta"].unique())
-    for v in VARIANTS:
-        t = table[table["variant"] == v]
+    for model, v in combos_in(table):
+        t = table[(table["variant"] == v) & (table["model"] == model)]
         rows = []
         for theta in thetas:
             sub = t[t["theta"] == theta]
@@ -338,12 +361,21 @@ def summarize_tables(table):
                     "rand_mean_confusion": rand["bench_ohp_confusion"].mean(),
                 }
             )
-        out[v] = pd.DataFrame(rows)
+        out[(model, v)] = pd.DataFrame(rows)
     return out
 
 
 def make_plot(tables, path):
-    fig, ax = plt.subplots(figsize=(7, 4.2), dpi=100)
+    """One panel per model (shared y axis); colours are variants."""
+    models = list(dict.fromkeys(m for m, _ in tables))
+    fig, axes = plt.subplots(
+        1,
+        len(models),
+        figsize=(7 * len(models) if len(models) > 1 else 7, 4.2),
+        dpi=100,
+        sharey=True,
+        squeeze=False,
+    )
     colors = {
         "baseline": "#1f77b4",
         "R1": "#2ca02c",
@@ -351,16 +383,19 @@ def make_plot(tables, path):
         "R2w": "#ff7f0e",
         "R2w8": "#9467bd",
     }
-    for v, t in tables.items():
-        ax.plot(t["theta"], t["worst_set_acc"], "-o", color=colors[v], label=f"{v} worst axis")
-        ax.plot(
-            t["theta"], t["rand_mean_set_acc"], "--s", color=colors[v], label=f"{v} random mean"
-        )
-    ax.set_xlabel("rotation of held-out participant (deg)")
-    ax.set_ylabel("set accuracy (mean over LOPO folds)")
-    ax.set_title("Rotation sensitivity")
-    ax.grid(alpha=0.3)
-    ax.legend(fontsize=7, ncol=3)
+    for ax, model in zip(axes[0], models, strict=True):
+        for (m, v), t in tables.items():
+            if m != model:
+                continue
+            ax.plot(t["theta"], t["worst_set_acc"], "-o", color=colors[v], label=f"{v} worst axis")
+            ax.plot(
+                t["theta"], t["rand_mean_set_acc"], "--s", color=colors[v], label=f"{v} random mean"
+            )
+        ax.set_xlabel("rotation of held-out participant (deg)")
+        ax.set_title(f"Rotation sensitivity: {model}")
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=7, ncol=3)
+    axes[0][0].set_ylabel("set accuracy (mean over LOPO folds)")
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path)
@@ -375,7 +410,9 @@ def render_report(table, tables, tols, meta):
         "",
         "The held-out participant's acc and gyro columns are rotated by the same R before "
         "feature engineering. Models are trained on unrotated data, except the augmented "
-        "variants. Augmentation method: the training set is the original (unrotated) training "
+        "variants. The model is a parameter (NN, KNN, RF; hyper-parameters as in the main "
+        "pipeline); every (model, variant) pair uses the same seeds, rotation conditions and "
+        "tolerance definition. Augmentation method: the training set is the original (unrotated) training "
         "sets PLUS K rotated copies of them (not K copies only); each copy of each set gets "
         "its own random R (uniform random axis, angle uniform in [0, max]), applied to acc "
         "and gyro before feature engineering; same seed for every augmented variant. "
@@ -392,25 +429,26 @@ def render_report(table, tables, tols, meta):
         "OHP recall each drop <= 5 pp vs theta = 0. 'signed' considers the six signed axes; "
         "'all' also includes the random axes.",
         "",
-        "| variant | theta_tol (signed axes) | theta_tol (all axes) |",
-        "|---|---|---|",
+        "| model | variant | theta_tol (signed axes) | theta_tol (all axes) |",
+        "|---|---|---|---|",
     ]
-    for v in VARIANTS:
-        lines.append(f"| {v} | {tols[v]['signed']:g} | {tols[v]['all']:g} |")
+    combos = list(tables)
+    for m, v in combos:
+        lines.append(f"| {m} | {v} | {tols[(m, v)]['signed']:g} | {tols[(m, v)]['all']:g} |")
     lines += ["", "## Metrics at theta = 0", ""]
     lines += [
-        "| variant | set acc | window macro-F1 | bench recall | OHP recall | conf |",
-        "|---|---|---|---|---|---|",
+        "| model | variant | set acc | window macro-F1 | bench recall | OHP recall | conf |",
+        "|---|---|---|---|---|---|---|",
     ]
-    for v in VARIANTS:
-        r = table[(table["variant"] == v) & (table["theta"] == 0)].iloc[0]
+    for m, v in combos:
+        r = table[(table["model"] == m) & (table["variant"] == v) & (table["theta"] == 0)].iloc[0]
         lines.append(
-            f"| {v} | {r['set_acc']:.3f} | {r['window_macro_f1']:.3f} | "
+            f"| {m} | {v} | {r['set_acc']:.3f} | {r['window_macro_f1']:.3f} | "
             f"{r['recall_bench']:.3f} | {r['recall_ohp']:.3f} | {r['bench_ohp_confusion']:.3f} |"
         )
-    for v in VARIANTS:
-        t = tables[v]
-        lines += ["", f"## {v}", ""]
+    for m, v in combos:
+        t = tables[(m, v)]
+        lines += ["", f"## {m} / {v}", ""]
         lines += [
             "| theta | Kabsch (g) | worst axis | set acc | bench | OHP | conf "
             "| min bench (signed) | min OHP (signed) | rand set acc | rand bench "
@@ -441,6 +479,20 @@ def main(argv=None):
     parser.add_argument("--no-mlflow", action="store_true")
     parser.add_argument("--n-jobs", type=int, default=-1)
     parser.add_argument(
+        "--models",
+        nargs="+",
+        default=list(DEFAULT_MODELS),
+        choices=sorted(lopo.MODEL_SPECS),
+        help="models to evaluate (cached results of other models are kept and reported)",
+    )
+    parser.add_argument(
+        "--variants",
+        nargs="+",
+        default=list(VARIANTS),
+        choices=list(VARIANTS),
+        help="variants to evaluate for the selected models",
+    )
+    parser.add_argument(
         "--fresh", action="store_true", help="ignore cached per-fold results and rerun everything"
     )
     args = parser.parse_args(argv)
@@ -448,51 +500,54 @@ def main(argv=None):
     warnings.filterwarnings("ignore")
     start = time.perf_counter()
     config.ensure_dirs()
+    sha, dirty = tracking.git_info()  # before any output file is written
 
     cached = pd.DataFrame()
     if not args.fresh and FOLDS_CSV_PATH.exists():
         cached = pd.read_csv(FOLDS_CSV_PATH)
+        if "model" not in cached.columns:  # written before the model parameter existed: NN
+            cached.insert(0, "model", MODEL)
         cached = cached[cached["variant"].isin(VARIANTS)]
-    todo = [v for v in VARIANTS if v not in set(cached.get("variant", []))]
-    logger.info(
-        "Variants reused from %s: %s; running: %s",
-        FOLDS_CSV_PATH.name,
-        [v for v in VARIANTS if v not in todo],
-        todo,
-    )
+    have = set(zip(cached.get("model", []), cached.get("variant", []), strict=False))
+    wanted = [(m, v) for m in args.models for v in VARIANTS if v in args.variants]
+    todo = [c for c in wanted if c not in have]
+    logger.info("Reused from %s: %s; running: %s", FOLDS_CSV_PATH.name, sorted(have), todo)
     cleaned = load_cleaned()
-    new = run_analysis(cleaned, n_jobs=args.n_jobs, variants=todo) if todo else pd.DataFrame()
+    new = run_analysis(cleaned, n_jobs=args.n_jobs, combos=todo) if todo else pd.DataFrame()
     runtime = time.perf_counter() - start
     folds = pd.concat([cached, new], ignore_index=True)
-    folds["variant"] = pd.Categorical(folds["variant"], categories=list(VARIANTS), ordered=True)
-    folds = folds.sort_values("variant", kind="stable").reset_index(drop=True)
-    folds["variant"] = folds["variant"].astype(str)
-    CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
-    folds.to_csv(FOLDS_CSV_PATH, index=False)
+    folds.to_csv(FOLDS_CSV_PATH, index=False)  # (model, variant) keyed cache
     table = aggregate(folds)
+    combos = combos_in(table)
+    order = {c: i for i, c in enumerate(combos)}
+    table = table.assign(_o=[order[c] for c in zip(table["model"], table["variant"], strict=True)])
+    table = table.sort_values("_o", kind="stable").drop(columns="_o").reset_index(drop=True)
+    CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(CSV_PATH, index=False)
 
     tables = summarize_tables(table)
     tols = {
-        v: {"signed": theta_tol(table, v, axes=set(SIGNED_AXES)), "all": theta_tol(table, v)}
-        for v in VARIANTS
+        (m, v): {
+            "signed": theta_tol(table, v, axes=set(SIGNED_AXES), model=m),
+            "all": theta_tol(table, v, model=m),
+        }
+        for m, v in combos
     }
     make_plot(tables, PLOT_PATH)
-    sha, dirty = tracking.git_info()
+    todo_names = ", ".join(f"{m}/{v}" for m, v in todo) or "none"
     meta = (
         f"Code {sha[:8]} (dirty={dirty}), data md5 {tracking.data_md5()}, "
-        f"computed this invocation: {', '.join(todo) or 'none'} ({runtime:.0f} s); "
-        "other variants reused from the cached per-fold results of the same code and data."
+        f"computed this invocation: {todo_names} ({runtime:.0f} s); "
+        "other (model, variant) pairs reused from the cached per-fold results of the same "
+        "protocol, seeds and data."
     )
     REPORT_PATH.write_text(render_report(table, tables, tols, meta), encoding="utf-8")
 
-    base0 = table[(table["variant"] == "baseline") & (table["theta"] == 0)].iloc[0]
-    logger.info(
-        "baseline theta=0: set_acc %.4f macro_f1 %.4f",
-        base0["set_acc"],
-        base0["window_macro_f1"],
-    )
-    logger.info("R1 drift (max-min over all conditions): %s", _drift(table, "R1"))
+    for m, v in combos:
+        r0 = tables[(m, v)].iloc[0]
+        logger.info("%s/%s theta=0: set_acc %.4f", m, v, r0["worst_set_acc"])
+    if (MODEL, "R1") in tables:
+        logger.info("R1 drift (max-min over all conditions): %s", _drift(table, "R1"))
     logger.info("theta_tol: %s", tols)
 
     run_ids = {}
@@ -500,15 +555,15 @@ def main(argv=None):
         import mlflow
 
         tracking.setup_tracking(args.tracking_uri, experiment=EXPERIMENT)
-        for v in todo:  # only variants computed in this invocation get a new run
-            with mlflow.start_run(run_name=v) as run:
+        for m, v in todo:  # only pairs computed in this invocation get a new run
+            with mlflow.start_run(run_name=v if m == MODEL else f"{m}/{v}") as run:
                 mlflow.set_tags(
                     {"git_sha": sha, "git_dirty": dirty, "data_md5": tracking.data_md5()}
                 )
                 mlflow.log_params(
                     {
                         "variant": v,
-                        "model": MODEL,
+                        "model": m,
                         "feature_set": "magnitude" if v == "R1" else BASELINE_SET,
                         "thetas": str(THETAS),
                         "n_random_axes": N_RANDOM_AXES,
@@ -518,23 +573,24 @@ def main(argv=None):
                         "aug_seed": AUG_SEED if v in AUG_VARIANTS else "none",
                     }
                 )
-                tracking.log_flat_params("hp", lopo.model_hyperparameters(MODEL))
+                tracking.log_flat_params("hp", lopo.model_hyperparameters(m))
                 mlflow.log_metrics(
                     {
-                        "theta_tol_signed": tols[v]["signed"],
-                        "theta_tol_all": tols[v]["all"],
-                        "set_acc_theta0": float(tables[v].iloc[0]["worst_set_acc"]),
+                        "theta_tol_signed": tols[(m, v)]["signed"],
+                        "theta_tol_all": tols[(m, v)]["all"],
+                        "set_acc_theta0": float(tables[(m, v)].iloc[0]["worst_set_acc"]),
                     }
                 )
                 with tempfile.TemporaryDirectory() as tmp:
-                    p = Path(tmp) / f"per_theta_{v}.csv"
-                    tables[v].to_csv(p, index=False)
+                    p = Path(tmp) / f"per_theta_{m}_{v}.csv"
+                    tables[(m, v)].to_csv(p, index=False)
                     mlflow.log_artifact(str(p))
-                    p2 = Path(tmp) / f"all_conditions_{v}.csv"
-                    table[table["variant"] == v].to_csv(p2, index=False)
+                    p2 = Path(tmp) / f"all_conditions_{m}_{v}.csv"
+                    sel = (table["variant"] == v) & (table["model"] == m)
+                    table[sel].to_csv(p2, index=False)
                     mlflow.log_artifact(str(p2))
                 mlflow.log_artifact(str(PLOT_PATH))
-                run_ids[v] = run.info.run_id
+                run_ids[f"{m}/{v}"] = run.info.run_id
         logger.info("MLflow run ids: %s", run_ids)
     logger.info("Done in %.0f s", time.perf_counter() - start)
     return table, tables, tols, run_ids

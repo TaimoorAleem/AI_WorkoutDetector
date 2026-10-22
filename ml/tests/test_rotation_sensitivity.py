@@ -111,3 +111,29 @@ def test_theta_tol_hand_made_table():
     # OHP recall criterion
     ohp = _table([base, ("m", 2, "+x", 0.96, 0.80, 0.64)])
     assert rs.theta_tol(ohp, "m") == 0.0
+
+
+def test_aggregate_and_theta_tol_are_keyed_by_model():
+    def fold(model, theta, axis, acc, bench, ohp):
+        return {
+            "model": model, "variant": "baseline", "theta": theta, "axis": axis,
+            "test_participant": "A", "set_acc": acc, "window_macro_f1": acc,
+            "window_acc": acc, "recall_bench": bench, "recall_ohp": ohp,
+            "n_bench": 10, "n_ohp": 10, "bench_to_ohp": 0, "ohp_to_bench": 0,
+        }  # fmt: skip
+
+    folds = pd.DataFrame(
+        [
+            fold("NN", 0, "none", 0.96, 0.8, 0.7),
+            fold("NN", 2, "+x", 0.50, 0.1, 0.7),
+            fold("KNN", 0, "none", 0.96, 0.8, 0.7),
+            fold("KNN", 2, "+x", 0.96, 0.8, 0.7),
+        ]
+    )
+    table = rs.aggregate(folds)
+    assert rs.combos_in(table) == [("NN", "baseline"), ("KNN", "baseline")]
+    assert rs.theta_tol(table, "baseline", model="NN") == 0.0
+    assert rs.theta_tol(table, "baseline", model="KNN") == 2.0
+    # a legacy cache without a model column is treated as NN
+    legacy = rs.aggregate(folds[folds["model"] == "NN"].drop(columns="model"))
+    assert set(legacy["model"]) == {"NN"}
