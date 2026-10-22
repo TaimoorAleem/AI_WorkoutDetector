@@ -6,6 +6,7 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
 - **`docs/PROJECT.md`**: the **source of truth** for scope, features, architecture, sensor spec, gates and phases. Don't change scope without the owner's approval.
 - **`docs/PROGRESS.md`**: current phase, next step, checklists, pending owner tasks, session log.
 - **`docs/DECISIONS.md`**: append-only decision log, with the reasoning behind each decision.
+- **`docs/INTERVIEW_NOTES.md`**: the owner's interview talking points (STAR stories, decisions, numbers, likely questions). Keep it current.
 
 ## Session ritual
 - **Start:** read `docs/PROGRESS.md` and continue from "Next step". Check `docs/PROJECT.md` before any scope-affecting work.
@@ -13,6 +14,7 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
   - Tick checklist items and update "Now".
   - Add a session-log line.
   - Log any new decision in `DECISIONS.md`.
+  - Update `INTERVIEW_NOTES.md` when there's a new story, decision, number or lesson worth telling (reproducible numbers only; include the why and the alternatives).
   - Commit the doc updates with the work.
 
 ## Git rules
