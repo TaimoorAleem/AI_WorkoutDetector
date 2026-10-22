@@ -1,20 +1,26 @@
 """
-Feature engineering pipeline combining temporal and frequency features
+Feature engineering pipeline combining temporal and frequency features.
+
+Every step runs per set: nothing here mixes samples from different sets, participants or
+labels, and nothing is fitted on other sets (PCA is fitted in-fold during modelling).
 """
 
 import logging
 
 import numpy as np
+import pandas as pd
 
-from workout_ml.features.DataTransformation import LowPassFilter, PrincipalComponentAnalysis
+from workout_ml.features.DataTransformation import LowPassFilter
 from workout_ml.features.FrequencyAbstraction import FourierTransformation
 from workout_ml.features.TemporalAbstraction import NumericalAbstraction
 
 logger = logging.getLogger(__name__)
 
+METADATA_COLUMNS = ["participant", "label", "category", "set"]
+
 
 class FeatureEngineer:
-    """End-to-end feature engineering pipeline"""
+    """End-to-end, per-set feature engineering pipeline"""
 
     def __init__(self, config):
         """
@@ -25,113 +31,83 @@ class FeatureEngineer:
         self.low_pass = LowPassFilter()
         self.temporal = NumericalAbstraction()
         self.frequency = FourierTransformation()
-        self.pca = PrincipalComponentAnalysis()
+
+    @property
+    def windows(self):
+        return list(self.config.get("rolling_windows", [5, 10]))
 
     def engineer_features(self, df):
         """
         Main feature engineering pipeline
 
         Args:
-            df: DataFrame with raw sensor data
+            df: DataFrame with sensor data (a time index per set) and a "set" column
 
         Returns:
-            DataFrame with engineered features
+            DataFrame with engineered features and metadata columns. Each set loses its
+            first ``max(window)`` rows, which lack a full in-set window.
         """
-        logger.info("Starting feature engineering pipeline")
-
-        df = df.copy()
+        logger.info("Starting per-set feature engineering")
         cols = self.config["predictor_columns"]
+        drop_n = max(self.windows + [self.config["window_size"]])
 
-        # Step 1: Interpolate missing values in predictor columns
-        logger.info("Interpolating missing values in predictor columns")
+        parts = []
+        dropped = 0
+        for _, set_df in df.groupby("set", sort=True):
+            featured = self._engineer_set(set_df.sort_index(kind="stable"), cols)
+            dropped += min(drop_n, len(featured))
+            parts.append(featured.iloc[drop_n:])
+        out = pd.concat(parts)
+
+        logger.info(
+            f"Dropped {dropped} rows ({100 * dropped / max(len(df), 1):.2f}%) without a full "
+            f"in-set window (first {drop_n} per set)"
+        )
+        if out.isna().any().any():
+            raise ValueError("Unexpected NaN in engineered features after window trimming")
+        logger.info(f"Feature engineering complete. Shape: {out.shape}")
+        return out
+
+    def _engineer_set(self, set_df, cols):
+        """All feature steps for one set (rows in time order)."""
+        data = set_df[cols + [c for c in METADATA_COLUMNS if c in set_df.columns]].copy()
         for col in cols:
-            df[col] = df[col].interpolate()
+            data[col] = data[col].interpolate(limit_direction="both")
 
-        # Step 2: Apply low-pass filter
-        logger.info("Applying low-pass filter")
-        df = self._apply_lowpass(df, cols)
-
-        # Step 3: Temporal features
-        logger.info("Extracting temporal features")
-        df = self._extract_temporal_features(df, cols)
-
-        # Step 4: Frequency features
-        logger.info("Extracting frequency features")
-        df = self._extract_frequency_features(df, cols)
-
-        # Step 4.5: Drop rows with NaN in predictor columns only (needed for PCA)
-        # Don't drop based on derived features which may have legitimate NaN values
-        rows_before = len(df)
-        df = df.dropna(subset=cols)
-        rows_after = len(df)
-        if rows_before != rows_after:
-            logger.info(
-                f"Dropped {rows_before - rows_after} rows with NaN in predictor columns ({((rows_before - rows_after) / rows_before) * 100:.2f}%)"
-            )
-
-        # Step 5: PCA
-        logger.info("Applying PCA")
-        df = self.pca.apply_pca(df, cols, self.config["pca_components"])
-
-        # Step 6: Calculate derived features
-        logger.info("Calculating derived features")
-        df = self._calculate_derived_features(df)
-
-        # Step 7: Drop rows whose rolling/FFT windows lack enough history (NaN features);
-        # the classifiers cannot handle missing values
-        rows_before = len(df)
-        df = df.dropna()
-        if rows_before != len(df):
-            logger.info(f"Dropped {rows_before - len(df)} rows with incomplete window features")
-
-        logger.info(f"Feature engineering complete. Shape: {df.shape}")
-        return df
-
-    def _apply_lowpass(self, df, cols):
-        """Apply low-pass filter to all sensor columns"""
+        # Low-pass (zero-phase filtfilt is fine: applied to a complete set, D-013)
         for col in cols:
-            df = self.low_pass.low_pass_filter(
-                df,
+            data = self.low_pass.low_pass_filter(
+                data,
                 col,
                 sampling_frequency=self.config["sampling_frequency"],
                 cutoff_frequency=self.config["lowpass_cutoff"],
                 order=5,
             )
-            df[col] = df[f"{col}_lowpass"]
-            df = df.drop(columns=[f"{col}_lowpass"])
+            data[col] = data[f"{col}_lowpass"]
+            data = data.drop(columns=[f"{col}_lowpass"])
 
-        return df
+        # Derived magnitudes (row-wise, no window)
+        derived = pd.DataFrame(
+            {
+                "acc_r": np.sqrt(data["acc_x"] ** 2 + data["acc_y"] ** 2 + data["acc_z"] ** 2),
+                "gyr_r": np.sqrt(data["gyr_x"] ** 2 + data["gyr_y"] ** 2 + data["gyr_z"] ** 2),
+            },
+            index=data.index,
+        )
 
-    def _extract_temporal_features(self, df, cols):
-        """Extract temporal statistics"""
-        for col in cols:
-            for window_size in [5, 10]:
-                for agg in ["mean", "std", "min", "max"]:
-                    df = self.temporal.abstract_numerical(df, [col], window_size, agg)
-
-        return df
-
-    def _extract_frequency_features(self, df, cols):
-        """Extract frequency domain features"""
-        df = self.frequency.abstract_frequency(
-            df,
+        # Temporal and frequency features: all new columns concatenated at once
+        sensors = data[cols]
+        temporal = sensors
+        for window_size in self.windows:
+            for agg in ["mean", "std", "min", "max"]:
+                temporal = self.temporal.abstract_numerical(temporal, cols, window_size, agg)
+        temporal = temporal.drop(columns=cols)
+        frequency = self.frequency.abstract_frequency(
+            sensors,
             cols,
             window_size=self.config["window_size"],
             sampling_rate=self.config["sampling_frequency"],
-        )
-        return df
+        ).drop(columns=cols)
 
-    def _calculate_derived_features(self, df):
-        """Calculate magnitude and duration features"""
-        # Resultant acceleration and gyroscope
-        df["acc_r"] = np.sqrt(df["acc_x"] ** 2 + df["acc_y"] ** 2 + df["acc_z"] ** 2)
-        df["gyr_r"] = np.sqrt(df["gyr_x"] ** 2 + df["gyr_y"] ** 2 + df["gyr_z"] ** 2)
-
-        # Duration per set
-        for s in df["set"].unique():
-            start = df[df["set"] == s].index[0]
-            stop = df[df["set"] == s].index[-1]
-            duration = (stop - start).total_seconds()
-            df.loc[df["set"] == s, "duration"] = duration
-
-        return df
+        meta = data[[c for c in METADATA_COLUMNS if c in data.columns]]
+        return pd.concat([sensors, derived, temporal, frequency, meta], axis=1)

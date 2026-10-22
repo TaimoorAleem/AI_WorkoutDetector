@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 # This class performs a Fourier transformation on the data to find frequencies that occur often and filter noise.
@@ -12,59 +13,50 @@ class FourierTransformation:
         return transformation.real, transformation.imag
 
     # Get frequencies over a certain window.
+    # Row i uses samples i - window_size .. i (window_size + 1 samples, trailing, so no look-ahead);
+    # the first window_size rows are NaN. The caller must pass a single set.
+    # Vectorised over rows with sliding windows; the definitions are those of the original loop.
     def abstract_frequency(self, data_table, cols, window_size, sampling_rate):
-
-        # Create new columns for the frequency data.
+        # Frequency grid used for the column names and the weighted/dominant frequency.
         freqs = np.round((np.fft.rfftfreq(int(window_size)) * sampling_rate), 3)
-
         n_rows = len(data_table.index)
+        n_freq = len(freqs)
 
-        # Pre-compute all results into dictionaries of arrays (vectorized approach)
-        results = {}
+        new = {}
         for col in cols:
-            results[col + "_max_freq"] = np.full(n_rows, np.nan)
-            results[col + "_freq_weighted"] = np.full(n_rows, np.nan)
-            results[col + "_pse"] = np.full(n_rows, np.nan)
-            for freq in freqs:
-                results[col + "_freq_" + str(freq) + "_Hz_ws_" + str(window_size)] = np.full(
-                    n_rows, np.nan
-                )
+            columns = {
+                f"{col}_freq_{freq}_Hz_ws_{window_size}": np.full(n_rows, np.nan) for freq in freqs
+            }
+            max_freq = np.full(n_rows, np.nan)
+            weighted = np.full(n_rows, np.nan)
+            pse = np.full(n_rows, np.nan)
 
-        # Pass over the dataset (we cannot compute it when we do not have enough history)
-        # and compute the values.
-        for i in range(window_size, n_rows):
-            for col in cols:
-                real_ampl, imag_ampl = self.find_fft_transformation(
-                    data_table[col].iloc[i - window_size : min(i + 1, n_rows)],
-                    sampling_rate,
-                )
-                # We only look at the real part in this implementation.
-                for j in range(0, len(freqs)):
-                    results[col + "_freq_" + str(freqs[j]) + "_Hz_ws_" + str(window_size)][i] = (
-                        real_ampl[j]
-                    )
-                # And select the dominant frequency. We only consider the positive frequencies for now.
+            x = data_table[col].to_numpy(dtype=float)
+            if n_rows > window_size:
+                windows = np.lib.stride_tricks.sliding_window_view(x, window_size + 1)
+                # real part of the FFT of each window; shape (n_windows, window_size // 2 + 1)
+                real = np.fft.rfft(windows, axis=1).real
+                if real.shape[1] != n_freq:
+                    raise ValueError("FFT length does not match the frequency grid")
+                valid = slice(window_size, n_rows)
+                for j, freq in enumerate(freqs):
+                    columns[f"{col}_freq_{freq}_Hz_ws_{window_size}"][valid] = real[:, j]
+                max_freq[valid] = freqs[np.argmax(real, axis=1)]
 
-                results[col + "_max_freq"][i] = freqs[np.argmax(real_ampl[0 : len(real_ampl)])]
-                real_ampl_sum = np.sum(real_ampl)
-                if real_ampl_sum != 0:
-                    results[col + "_freq_weighted"][i] = (
-                        float(np.sum(freqs * real_ampl)) / real_ampl_sum
-                    )
-                else:
-                    results[col + "_freq_weighted"][i] = 0.0
-                PSD = np.divide(np.square(real_ampl), float(len(real_ampl)))
-                PSD_sum = np.sum(PSD)
-                if PSD_sum != 0:
-                    PSD_pdf = np.divide(PSD, PSD_sum)
-                    # Avoid log(0) by filtering out zeros
-                    PSD_pdf_nonzero = PSD_pdf[PSD_pdf > 0]
-                    results[col + "_pse"][i] = -np.sum(np.log(PSD_pdf_nonzero) * PSD_pdf_nonzero)
-                else:
-                    results[col + "_pse"][i] = 0.0
+                total = real.sum(axis=1)
+                safe = np.where(total != 0, total, 1.0)
+                weighted[valid] = np.where(total != 0, (real * freqs).sum(axis=1) / safe, 0.0)
 
-        # Assign all columns at once to avoid DataFrame fragmentation
-        for col_name, values in results.items():
-            data_table[col_name] = values
+                psd = np.square(real) / float(n_freq)
+                psd_sum = psd.sum(axis=1)
+                pdf = psd / np.where(psd_sum != 0, psd_sum, 1.0)[:, None]
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    plogp = np.where(pdf > 0, pdf * np.log(pdf), 0.0)
+                pse[valid] = np.where(psd_sum != 0, -plogp.sum(axis=1), 0.0)
 
-        return data_table
+            new.update(columns)
+            new[col + "_max_freq"] = max_freq
+            new[col + "_freq_weighted"] = weighted
+            new[col + "_pse"] = pse
+
+        return pd.concat([data_table, pd.DataFrame(new, index=data_table.index)], axis=1)
