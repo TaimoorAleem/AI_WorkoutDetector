@@ -3,16 +3,22 @@ package dev.proprio.mobile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import dev.proprio.mobile.ui.AppRoot
+import dev.proprio.mobile.ui.ProprioTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val container = container
         setContent {
-            MaterialTheme {
-                Text("Proprio")
+            ProprioTheme {
+                AppRoot(container)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        container.coordinator.refreshConnection()
     }
 }
