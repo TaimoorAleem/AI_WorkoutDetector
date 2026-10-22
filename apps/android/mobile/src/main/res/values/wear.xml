@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Capability the watch looks up to find this phone (DataLayer.CAPABILITY_MOBILE). -->
+    <string-array name="android_wear_capabilities">
+        <item>proprio_mobile</item>
+    </string-array>
+</resources>
