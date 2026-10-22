@@ -4,9 +4,9 @@
 > Scope and specs live in [`PROJECT.md`](PROJECT.md), decisions in [`DECISIONS.md`](DECISIONS.md).
 
 ## Now
-- **Current phase:** Phase 0: hygiene and honest baseline
+- **Current phase:** Phase 1: CSF-1 normalization layer (Phase 0 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Phase 0 task 0.4b: implement `docs/specs/phase0-leakage-fix.md` (per-set preprocessing/features, no `duration`, in-fold PCA, LOPO, set-level vote, MLflow tracking, baseline report) on `feature/phase0-leakage` off `dev`. Then 0.5 (orchestrator review + report interpretation).
+- **Next step:** Phase 1: orchestrator writes `docs/sensor_spec.md` (§6.2 table, CSF-1, profile schema, fake-watch generator and rotation-sensitivity test design). Then Sonnet tasks in parallel: `sensors/` + tests ‖ fake-watch generator + rotation sensitivity.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`)
@@ -17,7 +17,8 @@
 - [ ] Create IBM Cloud account; approve resources and secrets (Phase 7)
 
 ## Blockers / open questions
-- Rep counter already fails most §6.5 gates on its own (training) data: MAE 0.89 (pass), but OHP MAE 1.85, exact 51%, ±1 82%. Optimistic numbers (cutoffs tuned on this data; expected reps assumed from category). Rework planned in Phase 4 (§6.6 rep-counter line).
+- Rep counter fails every §6.5 rep gate on its own (training) data after cleaning: MAE 1.05, exact 40%, ±1 81%, OHP MAE 1.90. Optimistic (cutoffs tuned on this data; expected reps assumed). Phase 4 rework is mandatory.
+- Classifier is orientation-dependent (temporal stats on raw axes); bench/OHP differ by ~0.13 g on x only. Phase 1 rotation-sensitivity test decides whether robust features are needed before watch data.
 - CI not yet exercised on GitHub (nothing pushed; owner decides when to push).
 
 ## Phase checklists
@@ -29,12 +30,13 @@
 - [x] [S] 0.2 ‖ Rep counter library `workout_ml.reps` (`count_set`, `count_peaks`, `evaluate_counter`), cutoffs in `REP_CONFIG`, golden test vs original script
 - [x] [S] 0.3 ‖ GitHub Actions `ml-ci.yml` (ruff + format + pytest on push/PR to dev/main); cross-platform uv locks, verified on Windows and Linux (Docker)
 - [x] [O] 0.4a Leakage-fix spec: `docs/specs/phase0-leakage-fix.md`
-- [ ] [S] 0.4b Implement the spec: per-set filtering/rolling/FFT, outliers → NaN + per-set interpolation, PCA/scaler fitted in folds, drop `duration`, LOPO CV, set-level majority vote
-- [ ] [O] 0.5 Review and write LOPO baseline report
+- [x] [S] 0.4b Implemented the spec (per-set features/outliers, no `duration`, in-fold PCA, LOPO, set vote, MLflow tracking, generated report); 86 tests; pipeline 292 s
+- [x] [O] 0.5 Review: `docs/reports/phase0-baseline-review.md`. Honest baseline: NN on temporal features, LOPO window acc 0.963±0.047, macro-F1 0.957±0.054, set acc 0.963±0.052 (was 0.9994 with leaks). Found 23 duplicate raw files (D-016).
 
 ### Phase 1: CSF-1 normalization layer
 - [ ] [O] `docs/sensor_spec.md` (the §6.2 table, CSF-1, profile schema)
 - [ ] [S] `sensors/` + tests ‖ [S] synthetic fake-watch generator + round-trip test
+- [ ] [S] Rotation-sensitivity test: best model's set accuracy and bench/OHP confusion vs rotation error (2°, 5°, 10°, 20° per axis); [O] decide on robust features
 - [ ] [S] Rewire pipeline onto CSF; regression test vs legacy loader
 
 ### Phase 2: Wear OS + phone recorder
@@ -46,11 +48,11 @@
 ### Phase 3: calibration + domain shift
 - [ ] [U] U1, U2 (×2), U3
 - [ ] [S] Eval harness ‖ [S] DVC watch ingest
-- [ ] [O] Verify units/rates; fit R; write Galaxy Watch profile; freeze `watch-val-v1`; domain-shift report
+- [ ] [O] Verify units/rates; fit R; write Galaxy Watch profile; freeze `watch-val-v1`; domain-shift report (bench/OHP confusion as its own line item)
 
 ### Phase 4: remediation + PyTorch
 - [ ] [O] Choose a branch of the decision tree
-- [ ] [S] Robust features ‖ [S] 1D-CNN → ONNX ‖ [S] rep re-tune
+- [ ] [S] Robust features ‖ [S] 1D-CNN → ONNX ‖ [S] rep-counter rework (mandatory) ‖ evaluate dropping FFT features
 - [ ] [S] DVC pipeline + `model-regression` CI job
 - [ ] [O] Select production model; model card
 
@@ -75,6 +77,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: Phase 0 complete. 0.4b merged; clean rerun on `dev` reproduced metrics exactly (MLflow parent `f5231a5df0974e1e94a80b04f2cfe6b6`). Orchestrator review written; D-016 (duplicate raw files); PROJECT.md §6.1 corrected; Phase 1 gains a rotation-sensitivity test.
 - 2026-10-22: 0.2 (rep counter library) and 0.3 (CI + cross-platform locks) merged into `dev`; 0.4 spec written.
 - 2026-10-22: 0.1 merged into `dev`. Leaky baseline (random 80/20 row split, `duration` feature): best = decision tree on 10 selected features, accuracy 0.9994 / F1 0.9994. This number is NOT trustworthy; 0.4 replaces it with LOPO. Runtime ~35 min, dominated by forward selection (~25 min).
 - 2026-10-22: 0.1 reviewed (AST-identical except config/pipeline). Fixed pandas 3 Arrow-string incompatibility in LearningAlgorithms (`.to_numpy()`). Owner requested MLflow: experiment tracking (Phase 0+), model registry with aliases candidate/production for CI gate and inference-svc (Phases 4-5), mlflow.evaluate for RAG golden set (Phase 6), server on Code Engine with Postgres backend + COS artifacts (Phase 7). Docs not yet updated for MLflow. Known: `duration` was selected by forward selection, confirming the leakage defect.

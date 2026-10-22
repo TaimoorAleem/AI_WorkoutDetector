@@ -49,3 +49,9 @@ RabbitMQ gives task-queue semantics, retries and a DLQ, with no need for replay 
 
 **D-015 · 2026-10-22 · Adopt MLflow for experiment tracking, model registry and LLM evaluation**
 Owner request. Every training run is tracked (params, metrics, plots, DVC data hash, git SHA). The registry's `candidate`/`production` aliases drive the CI regression gate and what inference-svc serves, so promotion and rollback don't need a redeploy. The coach's golden-set evaluation runs through `mlflow.evaluate` with versioned prompts. Hosting: local server for development; in the cloud, an MLflow server on Code Engine with its backend DB on the existing IBM Postgres instance and artifacts in COS. Division of labor: DVC versions data, MLflow tracks runs and models. Rejected: a JSON model card in the repo as the registry (no promotion workflow, no run history).
+
+**D-016 · 2026-10-22 · Ignore the 23 duplicate `*_1.4.41.csv` raw files**
+They are value-identical re-exports of `*_1.4.4.csv` sets with timestamps shifted by exactly +24 h (all 23 pairs verified). The loader keys sets by file stem, keeps the `1.4.4` file and logs each ignored copy. The dataset is 82 unique sets. The old pipeline double-counted 11 sets plus one accelerometer-only file, which also leaked under its random split. The raw DVC dataset is left untouched (immutable raw data); deduplication happens in code.
+
+**D-017 · 2026-10-22 · Phase 0 baseline accepted; set-level accuracy is the primary product metric**
+LOPO best: NN on basic + derived + in-fold PCA + temporal features, window acc 0.963 ± 0.047, macro-F1 0.957 ± 0.054, set acc 0.963 ± 0.052. The top models are within fold noise of each other. Window macro-F1 stays as the diagnostic metric. Consequences: Phase 1 adds a rotation-sensitivity test (the model relies on absolute axes, and bench/OHP is the fragile pair); Phase 4 rep-counter rework is mandatory; dropping the FFT features is to be evaluated.

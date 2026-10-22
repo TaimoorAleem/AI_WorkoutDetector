@@ -1,6 +1,6 @@
 # Proprio — Project Specification (source of truth)
 
-> **Status:** v1.1 · last updated 2026-10-22 (added MLflow, D-015)
+> **Status:** v1.2 · last updated 2026-10-22 (MLflow D-015; duplicate raw files D-016; Phase 0 baseline)
 > This document is the single source of truth for Proprio's scope, features, architecture and technical specs.
 > **Rules:** scope changes require the owner's approval and must be logged in [`DECISIONS.md`](DECISIONS.md). Task status lives in [`PROGRESS.md`](PROGRESS.md), not here.
 
@@ -130,10 +130,10 @@ Proprio is a gym logger:
 
 ## 6. Sensor calibration and validation spec
 
-### 6.1 Measured training-data facts (from `data/raw/MetaMotion`, 94 acc + 93 gyro files)
+### 6.1 Measured training-data facts (from `data/raw/MetaMotion`: 82 unique sets; 23 `*_1.4.41.csv` files are duplicate re-exports and are ignored, D-016)
 - **Device:** a single MetaWear device (MAC `C42732BE255C`), firmware 1.4.4. Bosch BMI160 IMU.
-- **Accelerometer:** units g, gravity **included** (median |a| = 1.007 g, p5 0.66, p95 1.31). Max |axis| is 1.82 g. The range setting isn't recorded, so ±2 g is possible.
-- **Gyroscope:** units deg/s. p99 |ω| = 92 deg/s, max 393 deg/s.
+- **Accelerometer:** units g, gravity **included** (median |a| = 1.001 g, p5 0.67, p95 1.30). Max |axis| is 1.82 g. The range setting isn't recorded, so ±2 g is possible.
+- **Gyroscope:** units deg/s. p99 |ω| = 79 deg/s, max 393 deg/s.
 - **Timing:** acc exactly 80 ms (12.5 Hz), gyro exactly 40 ms (25 Hz). **Zero jitter** (device-set timestamps). A few in-file gaps of 2.0–3.5 s.
 - **Axes:** +y points **distally along the forearm**. Mean acc_y is +0.94 g for bench (hand above wrist) and −1.02 g for deadlift and row. x and z are undetermined.
 - **Wrist:** not documented by the source. **Assumed left (decision).**
@@ -144,7 +144,8 @@ Proprio is a gym logger:
   - rest (0.52, −0.50, 0.30)
   - row (0.05, −1.02, 0.04)
   - squat (0.17, 0.66, 0.66)
-- **Sets:** 5 participants with uneven coverage (B and D have 9 sets each). Sets last 8–40 s (median 19 s). Rep ground truth is inferred from category, not annotated.
+- **Sets:** 5 participants with uneven coverage (A 27, B 9, C 14, D 9, E 23 sets). Sets last 8–40 s (median 18 s). Rep ground truth is inferred from category, not annotated.
+- **Phase 0 baseline (LOPO):** best set accuracy 0.963 ± 0.052; the main error is bench ↔ OHP, whose gravity vectors differ by only ~0.13 g on x. See `docs/reports/phase0-baseline-review.md`.
 
 ### 6.2 Domain gap: MetaMotion vs Galaxy Watch
 | Property | MetaMotion | Galaxy Watch (verify on device) | Conversion |
@@ -240,7 +241,7 @@ Legend: [O] orchestrator (Opus) · [S] Sonnet subagent · [U] owner (physical) �
 | Phase | Weeks | Goal | Acceptance |
 |---|---|---|---|
 | 0 Hygiene + honest baseline | 1 | `ml/workout_ml` package, Python 3.11, locked requirements, DVC, rep counter as a library, leakage fixes, LOPO, CI (ruff + pytest), MLflow tracking (local server) | CI green; pipeline logs a LOPO baseline run to MLflow (window F1, set accuracy, rep MAE) |
-| 1 CSF-1 layer | 2–3 | `sensors/`, tests, fake-watch generator, pipeline on CSF | §6.3 tests pass; fake-watch within 1 pp |
+| 1 CSF-1 layer | 2–3 | `sensors/`, tests, fake-watch generator, pipeline on CSF, rotation-sensitivity test | §6.3 tests pass; fake-watch within 1 pp; accuracy-vs-rotation curve sets the R-fit tolerance |
 | 2 Wear OS + phone recorder | 3–5 | `:protocol`, `:wear`, `:mobile`, Python Raw v1 reader | a recorded set opens in Python; rate and jitter in metadata; calibration mode works |
 | 3 Calibration + domain shift | 5–6 | U1/U2/U3, eval harness, profile fit, `watch-val-v1` frozen | domain-shift report with all gates evaluated |
 | 4 Remediation + PyTorch | 6–8 | decision tree, robust features, 1D-CNN → ONNX, rep re-tune, CI gate, MLflow model registry + aliases | model passes gates (or provisional); `dvc repro` reproducible |
