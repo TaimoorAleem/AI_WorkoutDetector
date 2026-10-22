@@ -262,7 +262,7 @@ fun RepPickerDialog(title: String, onSave: (Int, Int?, String) -> Unit, onDismis
 }
 
 internal fun formatElapsed(s: Double?): String {
-    val total = (s ?: 0.0).toInt()
+    val total = Math.round(s ?: 0.0).toInt()
     return "%d:%02d".format(total / 60, total % 60)
 }
 
