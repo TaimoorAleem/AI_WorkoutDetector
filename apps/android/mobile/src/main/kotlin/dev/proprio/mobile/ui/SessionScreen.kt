@@ -46,6 +46,7 @@ class SessionActions(
     val setConfig: ((SetConfig) -> SetConfig) -> Unit,
     val confirmReps: (reps: Int, rpe: Int?, note: String, confirmed: SetConfig?) -> Unit,
     val dismissPrompt: () -> Unit,
+    val discard: () -> Unit,
     val dismissMessage: () -> Unit,
     val refresh: () -> Unit,
 )
@@ -56,7 +57,7 @@ fun SessionScreen(coordinator: SessionCoordinator, modifier: Modifier = Modifier
     val actions = remember(coordinator) {
         SessionActions(
             coordinator::startSession, coordinator::endSession, coordinator::startSet, coordinator::startOther,
-            coordinator::stopSegment, coordinator::setConfig, coordinator::confirmReps, coordinator::dismissPrompt,
+            coordinator::stopSegment, coordinator::setConfig, coordinator::confirmReps, coordinator::dismissPrompt, coordinator::discardSegment,
             coordinator::dismissMessage, coordinator::refreshConnection,
         )
     }
@@ -107,7 +108,13 @@ fun SessionContent(state: SessionUiState, actions: SessionActions, modifier: Mod
     }
 
     state.repPrompt?.let { prompt ->
+        if (prompt.markKind == MarkKind.OTHER) {
+            ShortOtherDialog(prompt.shortS ?: 0.0, actions.discard, actions.dismissPrompt)
+            return@let
+        }
         RepPickerDialog(
+            shortS = prompt.shortS,
+            onDiscard = actions.discard,
             title = listOfNotNull(prompt.exercise, prompt.loadKg?.let { "${formatKg(it)} kg" }).joinToString(" ")
                 .ifEmpty { "Set finished" },
             onSave = actions.confirmReps,
@@ -271,6 +278,8 @@ fun RepPickerDialog(
     onSave: (Int, Int?, String, SetConfig?) -> Unit,
     onDismiss: () -> Unit,
     confirm: SetConfig? = null,
+    shortS: Double? = null,
+    onDiscard: () -> Unit = {},
 ) {
     var reps by remember { mutableStateOf<Int?>(null) }
     // Watch-started sets: exercise/load/category are prefilled but Save stays disabled until the user confirms them.
@@ -283,6 +292,13 @@ fun RepPickerDialog(
         title = { Text("How many reps? $title") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (shortS != null) {
+                    Text(
+                        "Only %.1f s long: probably an accidental press.".format(shortS),
+                        Modifier.testTag("short_warning"),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 chosen?.let { cfg ->
                     ExerciseConfirmSection(cfg, confirmed, onChange = { chosen = it; confirmed = true }, onConfirm = { confirmed = !confirmed })
                 }
@@ -314,15 +330,32 @@ fun RepPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { reps?.let { onSave(it, rpe, note.trim(), chosen) } },
-                enabled = reps != null && confirmed,
-                modifier = Modifier.testTag("save_reps"),
-            ) {
-                Text("Save")
+            Row {
+                if (shortS != null) {
+                    Button(onClick = onDiscard, modifier = Modifier.testTag("discard")) { Text("Discard (accidental)") }
+                }
+                TextButton(
+                    onClick = { reps?.let { onSave(it, rpe, note.trim(), chosen) } },
+                    enabled = reps != null && confirmed,
+                    modifier = Modifier.testTag("save_reps"),
+                ) {
+                    Text("Save")
+                }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Skip") } },
+    )
+}
+
+/** Stop prompt for an `other` segment that was suspiciously short: discard (default) or keep it as is. */
+@Composable
+private fun ShortOtherDialog(shortS: Double, onDiscard: () -> Unit, onKeep: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text("Very short segment") },
+        text = { Text("Only %.1f s long: probably an accidental press.".format(shortS), Modifier.testTag("short_warning")) },
+        confirmButton = { Button(onClick = onDiscard, modifier = Modifier.testTag("discard")) { Text("Discard (accidental)") } },
+        dismissButton = { TextButton(onClick = onKeep, modifier = Modifier.testTag("keep_segment")) { Text("Keep") } },
     )
 }
 

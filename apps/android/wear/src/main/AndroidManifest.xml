@@ -37,6 +37,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Phone-initiated session start (RemoteActivityHelper): opens the app so the foreground service may start. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="proprio" android:host="session" android:path="/start" />
+            </intent-filter>
         </activity>
 
         <service

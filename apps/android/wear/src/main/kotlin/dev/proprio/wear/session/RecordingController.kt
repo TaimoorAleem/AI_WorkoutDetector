@@ -95,6 +95,7 @@ class RecordingController(
     private val calibrationSteps: List<CalibrationStep> = CalibrationSequencer.DEFAULT_STEPS,
     private val exercise: ExerciseHost = NoExercise,
     private val strategy: () -> Strategy = { Strategy.NONE },
+    private val debounceMs: Long = TAP_DEBOUNCE_MS,
 ) {
     private val mutex = Mutex()
     private val _state = MutableStateFlow(UiState())
@@ -108,6 +109,7 @@ class RecordingController(
     private var lastStatusMs = 0L
     private var retryJob: Job? = null
     private var exerciseActive = false
+    private var lastAcceptedTapMs = Long.MIN_VALUE
 
     private val recording get() = sessionId != null
 
@@ -163,12 +165,14 @@ class RecordingController(
             log("startSegment ignored: calibration segments are automatic")
             return false
         }
+        if (debounced(source)) return false
         openSegment(kind, source, null)
         true
     }
 
     suspend fun stopSegment(source: SegmentSource): Boolean = mutex.withLock {
         if (!recording || kind == SessionKind.CALIBRATION) return false
+        if (debounced(source)) return false
         closeSegment() != null
     }
 
@@ -193,6 +197,21 @@ class RecordingController(
     }
 
     // ---- internals (call under mutex) ---------------------------------------------------------
+
+    /**
+     * Watch-UI start/stop taps within [debounceMs] of the previous accepted tap are ignored (accidental double
+     * presses). Phone commands and automatic segments are never debounced. Records the tap when it is accepted.
+     */
+    private fun debounced(source: SegmentSource): Boolean {
+        if (source != SegmentSource.WATCH) return false
+        val now = nowMs()
+        if (lastAcceptedTapMs != Long.MIN_VALUE && now - lastAcceptedTapMs < debounceMs) {
+            log("segment tap ignored: ${now - lastAcceptedTapMs} ms after the previous one")
+            return true
+        }
+        lastAcceptedTapMs = now
+        return false
+    }
 
     private fun openSegment(kind: MarkKind?, source: SegmentSource, step: String?) {
         val r = checkNotNull(tracker).start(kind, source, step)
@@ -395,5 +414,6 @@ class RecordingController(
 
     companion object {
         const val STATUS_INTERVAL_MS = 5_000L
+        const val TAP_DEBOUNCE_MS = 1_000L
     }
 }

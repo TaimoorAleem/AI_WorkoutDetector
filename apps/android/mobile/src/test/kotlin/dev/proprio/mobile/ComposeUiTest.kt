@@ -207,4 +207,51 @@ class ComposeUiTest {
             Dispatchers.resetMain()
         }
     }
+
+    @Test
+    fun reviewScreen_marksSetsWithoutRepsAsUnconfirmed() {
+        val store = SessionStore(File(tmp.root, "sessions"), header = { LabelHeader("P01", Consent(true, "x")) })
+        SessionImporter(store).import(SID, TestSupport.buildZip(tmp.newFolder()))
+        store.updateLabels(SID) {
+            LabelEditor.put(
+                LabelEditor.put(it, dev.proprio.protocol.SegmentLabel(1, SegmentKind.SET, "ohp")),
+                dev.proprio.protocol.SegmentLabel(2, SegmentKind.SET, "squat", 100.0, "heavy", 5),
+            )
+        }
+        Dispatchers.setMain(Dispatchers.Unconfined)
+        val vm = ReviewViewModel(SID, store, dev.proprio.mobile.data.ExportBuilder(store, File(tmp.root, "exp")), io = Dispatchers.Unconfined)
+        try {
+            compose.setContent {
+                ProprioTheme { ReviewScreen(vm.state.collectAsState().value, {}, vm::select, vm::applyEdit, vm::nudge, {}) }
+            }
+            compose.onNodeWithTag("unconfirmed_1").performScrollTo().assertExists()
+            compose.onNodeWithTag("unconfirmed_2").assertDoesNotExist()
+            compose.onNodeWithText("unconfirmed").assertExists()
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun shortSegmentPromptOffersDiscardWhichWritesTheLabel() {
+        val link = FakeWatchLink { SID }
+        val store = SessionStore(File(tmp.root, "sessions"), header = { LabelHeader("P01", Consent(true, "2026-01-01T00:00:00Z")) })
+        val coordinator = SessionCoordinator(
+            scope, link, store, SessionImporter(store),
+            MemorySettingsStore(UserSettings("P01", true, "2026-01-01T00:00:00Z", true)),
+            io = Dispatchers.Unconfined,
+        )
+        compose.setContent { ProprioTheme { SessionScreen(coordinator) } }
+        runBlocking {
+            link.emitEvent(dev.proprio.protocol.SegmentEvent(SID, 1, dev.proprio.protocol.SegmentEvent.Event.STARTED, null, "watch"))
+            link.emitEvent(dev.proprio.protocol.SegmentEvent(SID, 1, dev.proprio.protocol.SegmentEvent.Event.STOPPED, null, "watch"))
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("short_warning").assertExists()
+        compose.onNodeWithTag("discard").performClick()
+        compose.waitForIdle()
+        val l = LabelEditor.find(store.readLabels(SID)!!, 1)!!
+        assertEquals(SegmentKind.OTHER, l.kind)
+        assertEquals("discarded", l.note)
+    }
 }

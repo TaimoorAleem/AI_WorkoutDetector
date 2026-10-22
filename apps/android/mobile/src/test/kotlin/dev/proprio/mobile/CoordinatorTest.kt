@@ -46,8 +46,11 @@ class CoordinatorTest {
             scope, link, store, SessionImporter(store),
             MemorySettingsStore(UserSettings("P01", true, "2026-01-01T00:00:00Z", true)),
             io = Dispatchers.Unconfined,
+            nowMs = { nowMs },
         )
     }
+
+    private var nowMs = 1_000_000L
 
     @After fun tearDown() = scope.cancel()
 
@@ -74,7 +77,7 @@ class CoordinatorTest {
         assertEquals(5, l.repsUser)
         assertEquals(8, l.rpe)
         assertEquals("felt easy", l.note)
-        assertEquals(listOf("session/start:GYM", "segment/start:SET", "segment/stop"), link.commands)
+        assertEquals(listOf("launch:GYM", "session/start:GYM", "segment/start:SET", "segment/stop"), link.commands)
     }
 
     @Test
@@ -90,6 +93,7 @@ class CoordinatorTest {
     fun otherSegmentIsLabeledOtherAndHasNoRepPrompt() {
         coordinator.startSession(SessionKind.GYM)
         coordinator.startOther()
+        nowMs += 10_000
         coordinator.stopSegment()
         assertEquals(SegmentKind.OTHER, LabelEditor.find(store.readLabels(SID)!!, 1)!!.kind)
         assertNull(coordinator.state.value.repPrompt)
@@ -178,5 +182,76 @@ class CoordinatorTest {
         coordinator.startSession(SessionKind.GYM)
         assertNotNull(coordinator.state.value.message)
         assertFalse(coordinator.state.value.connected)
+    }
+
+    @Test
+    fun shortSetOffersDiscardAndDiscardWritesOtherWithNote() {
+        coordinator.startSession(SessionKind.GYM)
+        coordinator.startSet()
+        nowMs += 2_700
+        coordinator.stopSegment()
+        val prompt = coordinator.state.value.repPrompt!!
+        assertEquals(2.7, prompt.shortS!!, 1e-9)
+
+        coordinator.discardSegment()
+        assertNull(coordinator.state.value.repPrompt)
+        val l = LabelEditor.find(store.readLabels(SID)!!, 1)!!
+        assertEquals(SegmentKind.OTHER, l.kind)
+        assertEquals("discarded", l.note)
+        assertNull(l.exercise)
+        assertNull(l.repsUser)
+        assertEquals(emptyList<String>(), TestSupport.labelErrors(File(store.dir(SID), FILE_LABELS).readText()))
+    }
+
+    @Test
+    fun threeSecondSetIsNotShortAndShortOtherPrompts() {
+        coordinator.startSession(SessionKind.GYM)
+        coordinator.startSet()
+        nowMs += 3_000
+        coordinator.stopSegment()
+        assertNull(coordinator.state.value.repPrompt!!.shortS)
+        coordinator.dismissPrompt()
+
+        coordinator.startOther()
+        nowMs += 500
+        coordinator.stopSegment()
+        val p = coordinator.state.value.repPrompt!!
+        assertEquals(dev.proprio.protocol.MarkKind.OTHER, p.markKind)
+        assertNotNull(p.shortS)
+
+        coordinator.startOther()
+        nowMs += 10_000
+        coordinator.dismissPrompt()
+        coordinator.stopSegment()
+        assertNull(coordinator.state.value.repPrompt) // long `other`: no prompt, as before
+    }
+
+    @Test
+    fun startSessionLaunchesTheWatchAppBeforeTheCommand() {
+        coordinator.startSession(SessionKind.GYM)
+        assertEquals(listOf("launch:GYM", "session/start:GYM"), link.commands)
+        assertNull(coordinator.state.value.message)
+        assertEquals(dev.proprio.protocol.WatchStatus.State.RECORDING, coordinator.state.value.watch?.state)
+    }
+
+    @Test
+    fun failedLaunchFallsBackToTheCommandAndOnlyBothFailingShowsTheMessage() {
+        link.launchSucceeds = false
+        coordinator.startSession(SessionKind.GYM) // app already open: the message command still works
+        assertNull(coordinator.state.value.message)
+        assertEquals(listOf("launch:GYM", "session/start:GYM"), link.commands)
+
+        link.setConnected(false)
+        coordinator.startSession(SessionKind.CALIBRATION)
+        assertEquals("Open Proprio on your watch, then try again.", coordinator.state.value.message)
+    }
+
+    @Test
+    fun watchLaunchUriEncodesKindAndParticipant() {
+        assertEquals(
+            "proprio://session/start?kind=CALIBRATION&participant=P%2F01",
+            dev.proprio.mobile.data.WatchLaunch.uriString(SessionKind.CALIBRATION, "P/01"),
+        )
+        assertEquals("proprio://session/start?kind=GYM", dev.proprio.mobile.data.WatchLaunch.uriString(SessionKind.GYM, null))
     }
 }

@@ -280,3 +280,24 @@ def test_cli_prints_stats_and_segment_table(capsys):
     out = capsys.readouterr().out
     assert "rate_hz" in out and "implicit" in out and "bench" in out
     assert A.schema_dir().joinpath("meta.schema.json").is_file()
+
+
+def test_discarded_segments_are_excluded_by_default(tmp_path):
+    entries = _entries("gym")
+    labels = json.loads(entries["labels.json"])
+    seg = labels["segments"][0]
+    seg.update(kind="other", note="discarded")
+    for k in ("exercise", "load_kg", "category", "reps_user", "rpe"):
+        seg.pop(k, None)
+    path = _write_zip(tmp_path / "d.zip", {**entries, "labels.json": json.dumps(labels).encode()})
+    s = read_session(path)
+    all_ids = [x.meta["segment_id"] for x in s.segments(include_discarded=True)]
+    kept_ids = [x.meta["segment_id"] for x in s.segments()]
+    assert seg["segment_id"] in all_ids
+    assert seg["segment_id"] not in kept_ids
+    assert set(all_ids) - set(kept_ids) == {seg["segment_id"]}
+    assert seg["segment_id"] not in [x.meta["segment_id"] for x in s.segments(kinds=["other"])]
+    # an ordinary "other" note is kept
+    assert len(read_session(ZIPS["gym"]).segments()) == len(
+        read_session(ZIPS["gym"]).segments(include_discarded=True)
+    )

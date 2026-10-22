@@ -27,6 +27,7 @@ espresso = "3.7.0"
 # wear
 wear = "1.4.0"
 wear-ongoing = "1.1.0"
+wear-remote-interactions = "1.1.0"
 health-services = "1.1.0"
 concurrent-futures = "1.3.0"
 
@@ -63,6 +64,7 @@ androidx-test-runner = { module = "androidx.test:runner", version.ref = "android
 # wear
 wear = { module = "androidx.wear:wear", version.ref = "wear" }
 wear-ongoing = { module = "androidx.wear:wear-ongoing", version.ref = "wear-ongoing" }
+wear-remote-interactions = { module = "androidx.wear:wear-remote-interactions", version.ref = "wear-remote-interactions" }
 health-services-client = { module = "androidx.health:health-services-client", version.ref = "health-services" }
 concurrent-futures-ktx = { module = "androidx.concurrent:concurrent-futures-ktx", version.ref = "concurrent-futures" }
 

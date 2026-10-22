@@ -138,6 +138,27 @@ class DataLogicTest {
         assertEquals(123L, s.tStartNs)
     }
 
+    @Test
+    fun unconfirmedMeansSetWithoutRepsAndDiscardClearsSetFields() {
+        val store = store()
+        SessionImporter(store).import(SID, TestSupport.buildZip(tmp.newFolder()))
+        store.updateLabels(SID) {
+            LabelEditor.put(
+                LabelEditor.put(it, SegmentLabel(1, SegmentKind.SET, "ohp")),
+                SegmentLabel(2, SegmentKind.SET, "squat", 100.0, "heavy", 5),
+            )
+        }
+        val byId = store.load(SID).resolvedSegments().associateBy { it.segmentId }
+        assertTrue(LabelEditor.isUnconfirmed(byId.getValue(1)))
+        assertFalse(LabelEditor.isUnconfirmed(byId.getValue(2)))
+        assertFalse(byId.values.filter { it.implicit }.any(LabelEditor::isUnconfirmed))
+        val d = LabelEditor.discard(SegmentLabel(1, SegmentKind.SET, "ohp", 60.0, "heavy", 3, 7, tStartNs = 5L))
+        assertEquals(SegmentKind.OTHER, d.kind)
+        assertEquals("discarded", d.note)
+        assertNull(d.exercise)
+        assertEquals(5L, d.tStartNs)
+    }
+
     // ---- implicit rest preview = SegmentResolver ----
 
     @Test
