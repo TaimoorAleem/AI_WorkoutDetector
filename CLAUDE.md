@@ -46,9 +46,9 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
   - `workout_ml/features/`: `FeatureEngineer`, filters, temporal and FFT features.
   - `workout_ml/models/`: `ModelTrainer`, `LearningAlgorithms`.
   - `workout_ml/pipeline.py`: end-to-end pipeline (`main()`).
-  - `scripts/count_repetitions_exploration.py`: exploratory rep-counting script (not importable, to be rewritten).
+  - `workout_ml/reps/`: rep counting (`counter.py`: `count_set`, `count_peaks`; `evaluate.py`: per-set evaluation and summary).
   - `tests/`: pytest suite.
 - Raw data lives in `data/raw/MetaMotion/`, tracked by DVC (`data/raw/MetaMotion.dvc`, local remote `E:/dvc-store/proprio`). Run `dvc pull` to fetch.
 - Environment: conda env `proprio` (Python 3.11). Setup: `conda activate proprio`, `pip install -r ml/requirements-dev.lock`, `pip install -e ml --no-deps`.
-- Commands: `python -m workout_ml.pipeline`, `pytest ml/tests`, `ruff check ml`.
+- Commands: `python -m workout_ml.pipeline`, `python -m workout_ml.reps.evaluate`, `pytest ml/tests`, `ruff check ml`.
 - Platform: Windows 11. Both the Bash tool (Git Bash) and PowerShell are available.
