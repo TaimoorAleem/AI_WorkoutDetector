@@ -23,7 +23,7 @@ dev = [
     "hypothesis>=6",
     "ruff>=0.5",
     "dvc>=3",
-    "pip-tools>=7",
+    "uv>=0.4",
 ]
 
 [tool.setuptools.packages.find]

@@ -21,6 +21,8 @@ pytest ml/tests                   # tests
 ruff check ml                     # lint
 ```
 
+Locks are cross-platform; regenerate with `uv pip compile ml/pyproject.toml --universal --python-version 3.11 -o ml/requirements.lock` (add `--extra dev` and `-o ml/requirements-dev.lock` for the dev lock). CI (`.github/workflows/ml-ci.yml`) runs ruff and pytest on push/PR to `dev` and `main`.
+
 ## References
 
 Book: [Hoogendoorn, M. and Funk, B., Machine Learning for the Quantified Self - On the Art of Learning from Sensory Data, Springer, 2018.](https://link.springer.com/book/10.1007/978-3-319-66308-1)
