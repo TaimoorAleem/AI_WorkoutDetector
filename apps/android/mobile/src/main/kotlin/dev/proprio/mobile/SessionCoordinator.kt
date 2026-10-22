@@ -32,8 +32,19 @@ data class SetConfig(
 
 data class OpenSegment(val sessionId: String, val segmentId: Int, val kind: MarkKind)
 
-/** Shown after a set stops: asks for the rep count of exactly this segment. */
-data class RepPrompt(val sessionId: String, val segmentId: Int, val exercise: String?, val loadKg: Double?)
+/**
+ * Shown after a set stops: asks for the rep count of exactly this segment. When the set was started on the
+ * watch ([fromWatch]) the phone's selection at that moment was only a guess, so the prompt also asks the user to
+ * confirm the exercise, load and category (prefilled from the label).
+ */
+data class RepPrompt(
+    val sessionId: String,
+    val segmentId: Int,
+    val exercise: String?,
+    val loadKg: Double?,
+    val category: String? = null,
+    val fromWatch: Boolean = false,
+)
 
 data class SessionUiState(
     val connected: Boolean = false,
@@ -120,14 +131,22 @@ class SessionCoordinator(
     /** Stops whatever segment is open on the watch (set or other). */
     fun stopSegment() = command("Could not stop: watch not reachable.") { link.stopSegment() }
 
-    /** Saves the rep count (and optional RPE/note) against the segment the prompt was opened for. */
-    fun confirmReps(reps: Int, rpe: Int?, note: String) {
+    /**
+     * Saves the rep count (and optional RPE/note) against the segment the prompt was opened for. [confirmed], when
+     * given, is the exercise/load/category the user confirmed (watch-started sets) and replaces the label's values.
+     */
+    fun confirmReps(reps: Int, rpe: Int?, note: String, confirmed: SetConfig? = null) {
         val p = prompt.value ?: return
         scope.launch {
             withContext(io) {
                 store.updateLabels(p.sessionId) { labels ->
                     LabelEditor.update(labels, p.segmentId, SegmentKind.SET) {
-                        it.copy(repsUser = reps, rpe = rpe, note = note)
+                        val withReps = it.copy(repsUser = reps, rpe = rpe, note = note)
+                        if (confirmed == null) {
+                            withReps
+                        } else {
+                            withReps.copy(exercise = confirmed.exercise, loadKg = confirmed.loadKg, category = confirmed.category)
+                        }
                     }
                 }
             }
@@ -164,7 +183,10 @@ class SessionCoordinator(
                 if (o?.segmentId == e.segmentId && o.sessionId == e.sessionId) open.value = null
                 if ((e.kind ?: MarkKind.SET) == MarkKind.SET) {
                     val label = withContext(io) { store.readLabels(e.sessionId) }?.let { LabelEditor.find(it, e.segmentId) }
-                    prompt.value = RepPrompt(e.sessionId, e.segmentId, label?.exercise, label?.loadKg)
+                    prompt.value = RepPrompt(
+                        e.sessionId, e.segmentId, label?.exercise, label?.loadKg, label?.category,
+                        fromWatch = e.source == "watch",
+                    )
                 }
             }
         }

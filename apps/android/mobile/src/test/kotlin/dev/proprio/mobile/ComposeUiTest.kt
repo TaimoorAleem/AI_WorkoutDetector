@@ -108,6 +108,33 @@ class ComposeUiTest {
     }
 
     @Test
+    fun watchStartedSet_promptRequiresExplicitExerciseConfirmation() {
+        val link = FakeWatchLink { SID }
+        val store = SessionStore(File(tmp.root, "sessions"), header = { LabelHeader("P01", Consent(true, "2026-01-01T00:00:00Z")) })
+        val coordinator = SessionCoordinator(
+            scope, link, store, SessionImporter(store),
+            MemorySettingsStore(UserSettings("P01", true, "2026-01-01T00:00:00Z", true)),
+            io = Dispatchers.Unconfined,
+        )
+        compose.setContent { ProprioTheme { SessionScreen(coordinator) } }
+        compose.onNodeWithTag("exercise_squat").assertDoesNotExist() // idle: no config card
+        runBlocking {
+            link.emitEvent(dev.proprio.protocol.SegmentEvent(SID, 2, dev.proprio.protocol.SegmentEvent.Event.STARTED, null, "watch"))
+            link.emitEvent(dev.proprio.protocol.SegmentEvent(SID, 2, dev.proprio.protocol.SegmentEvent.Event.STOPPED, null, "watch"))
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("rep_5").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        // reps alone are not enough: the prefilled exercise must be confirmed
+        compose.onNodeWithTag("save_reps").assertIsNotEnabled()
+        compose.onNodeWithTag("prompt_exercise_row").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) // choosing = confirming
+        compose.onNodeWithTag("save_reps").assertIsEnabled().performClick()
+        compose.waitForIdle()
+        val l = LabelEditor.find(store.readLabels(SID)!!, 2)!!
+        assertEquals("row", l.exercise)
+        assertEquals(5, l.repsUser)
+    }
+
+    @Test
     fun disconnectedWatchDisablesStart() {
         val link = FakeWatchLink { SID }.also { it.setConnected(false) }
         val store = SessionStore(File(tmp.root, "sessions"), header = { LabelHeader("P01", Consent(false, "x")) })

@@ -104,6 +104,30 @@ class CoordinatorTest {
     }
 
     @Test
+    fun watchStartedSetAsksToConfirmTheExercise_phoneStartedDoesNot() = runBlocking {
+        coordinator.setConfig { it.copy(exercise = "ohp", loadKg = 40.0, category = "medium") }
+        link.emitEvent(SegmentEvent(SID, 3, SegmentEvent.Event.STARTED, null, "watch"))
+        link.emitEvent(SegmentEvent(SID, 3, SegmentEvent.Event.STOPPED, null, "watch"))
+        val p = coordinator.state.value.repPrompt!!
+        assertTrue(p.fromWatch)
+        assertEquals("ohp", p.exercise)
+        assertEquals(40.0, p.loadKg!!, 0.0)
+        assertEquals("medium", p.category)
+
+        // the user corrects the guess while confirming
+        coordinator.confirmReps(8, null, "", SetConfig("row", 55.0, "heavy"))
+        val l = LabelEditor.find(store.readLabels(SID)!!, 3)!!
+        assertEquals("row", l.exercise)
+        assertEquals(55.0, l.loadKg!!, 0.0)
+        assertEquals("heavy", l.category)
+        assertEquals(8, l.repsUser)
+
+        link.emitEvent(SegmentEvent(SID, 4, SegmentEvent.Event.STARTED, null, "phone"))
+        link.emitEvent(SegmentEvent(SID, 4, SegmentEvent.Event.STOPPED, null, "phone"))
+        assertFalse(coordinator.state.value.repPrompt!!.fromWatch)
+    }
+
+    @Test
     fun calibrationAutoSegmentsAreNotLabeled() = runBlocking {
         link.emitEvent(SegmentEvent(SID, 1, SegmentEvent.Event.STARTED, null, "auto"))
         assertNull(store.readLabels(SID))

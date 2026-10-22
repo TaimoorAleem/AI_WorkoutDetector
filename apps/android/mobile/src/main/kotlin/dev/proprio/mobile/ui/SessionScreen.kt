@@ -44,7 +44,7 @@ class SessionActions(
     val startOther: () -> Unit,
     val stopSegment: () -> Unit,
     val setConfig: ((SetConfig) -> SetConfig) -> Unit,
-    val confirmReps: (reps: Int, rpe: Int?, note: String) -> Unit,
+    val confirmReps: (reps: Int, rpe: Int?, note: String, confirmed: SetConfig?) -> Unit,
     val dismissPrompt: () -> Unit,
     val dismissMessage: () -> Unit,
     val refresh: () -> Unit,
@@ -111,6 +111,15 @@ fun SessionContent(state: SessionUiState, actions: SessionActions, modifier: Mod
             title = listOfNotNull(prompt.exercise, prompt.loadKg?.let { "${formatKg(it)} kg" }).joinToString(" ")
                 .ifEmpty { "Set finished" },
             onSave = actions.confirmReps,
+            confirm = if (prompt.fromWatch) {
+                SetConfig(
+                    prompt.exercise ?: state.config.exercise,
+                    prompt.loadKg ?: state.config.loadKg,
+                    prompt.category ?: state.config.category,
+                )
+            } else {
+                null
+            },
             onDismiss = actions.dismissPrompt,
         )
     }
@@ -214,10 +223,59 @@ private fun SetButtons(state: SessionUiState, actions: SessionActions) {
     }
 }
 
+/** Exercise, load and category of a watch-started set: prefilled, editable, and explicitly confirmable. */
+@Composable
+private fun ExerciseConfirmSection(cfg: SetConfig, confirmed: Boolean, onChange: (SetConfig) -> Unit, onConfirm: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Which exercise was it?", style = MaterialTheme.typography.titleSmall)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            EXERCISES.forEach { ex ->
+                FilterChip(
+                    selected = cfg.exercise == ex,
+                    onClick = { onChange(cfg.copy(exercise = ex)) },
+                    label = { Text(ex) },
+                    modifier = Modifier.testTag("prompt_exercise_$ex"),
+                )
+            }
+        }
+        OutlinedTextField(
+            value = cfg.loadKg?.let { formatKg(it) }.orEmpty(),
+            onValueChange = { text -> onChange(cfg.copy(loadKg = text.replace(',', '.').toDoubleOrNull())) },
+            label = { Text("Load (kg)") },
+            singleLine = true,
+            modifier = Modifier.testTag("prompt_load"),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CATEGORIES.forEach { c ->
+                FilterChip(
+                    selected = cfg.category == c,
+                    onClick = { onChange(cfg.copy(category = c)) },
+                    label = { Text(c) },
+                    modifier = Modifier.testTag("prompt_category_$c"),
+                )
+            }
+        }
+        FilterChip(
+            selected = confirmed,
+            onClick = onConfirm,
+            label = { Text("Confirm: ${cfg.exercise}, ${cfg.loadKg?.let { formatKg(it) + " kg" } ?: "no load"}, ${cfg.category}") },
+            modifier = Modifier.testTag("confirm_exercise"),
+        )
+    }
+}
+
 /** Rep count (required), RPE and note (optional) for the set that just ended. Starts empty. */
 @Composable
-fun RepPickerDialog(title: String, onSave: (Int, Int?, String) -> Unit, onDismiss: () -> Unit) {
+fun RepPickerDialog(
+    title: String,
+    onSave: (Int, Int?, String, SetConfig?) -> Unit,
+    onDismiss: () -> Unit,
+    confirm: SetConfig? = null,
+) {
     var reps by remember { mutableStateOf<Int?>(null) }
+    // Watch-started sets: exercise/load/category are prefilled but Save stays disabled until the user confirms them.
+    var chosen by remember { mutableStateOf(confirm) }
+    var confirmed by remember { mutableStateOf(confirm == null) }
     var rpe by remember { mutableStateOf<Int?>(null) }
     var note by remember { mutableStateOf("") }
     AlertDialog(
@@ -225,6 +283,9 @@ fun RepPickerDialog(title: String, onSave: (Int, Int?, String) -> Unit, onDismis
         title = { Text("How many reps? $title") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                chosen?.let { cfg ->
+                    ExerciseConfirmSection(cfg, confirmed, onChange = { chosen = it; confirmed = true }, onConfirm = { confirmed = !confirmed })
+                }
                 Text("Reps: ${reps ?: "-"}", Modifier.testTag("reps_value"), style = MaterialTheme.typography.titleLarge)
                 (1..20).chunked(5).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -253,7 +314,11 @@ fun RepPickerDialog(title: String, onSave: (Int, Int?, String) -> Unit, onDismis
             }
         },
         confirmButton = {
-            TextButton(onClick = { reps?.let { onSave(it, rpe, note.trim()) } }, enabled = reps != null, modifier = Modifier.testTag("save_reps")) {
+            TextButton(
+                onClick = { reps?.let { onSave(it, rpe, note.trim(), chosen) } },
+                enabled = reps != null && confirmed,
+                modifier = Modifier.testTag("save_reps"),
+            ) {
                 Text("Save")
             }
         },
