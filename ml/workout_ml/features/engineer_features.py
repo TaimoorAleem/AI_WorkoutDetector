@@ -77,6 +77,13 @@ class FeatureEngineer:
         logger.info("Calculating derived features")
         df = self._calculate_derived_features(df)
 
+        # Step 7: Drop rows whose rolling/FFT windows lack enough history (NaN features);
+        # the classifiers cannot handle missing values
+        rows_before = len(df)
+        df = df.dropna()
+        if rows_before != len(df):
+            logger.info(f"Dropped {rows_before - len(df)} rows with incomplete window features")
+
         logger.info(f"Feature engineering complete. Shape: {df.shape}")
         return df
 

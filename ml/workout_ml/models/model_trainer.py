@@ -25,6 +25,14 @@ from workout_ml.models.LearningAlgorithms import ClassificationAlgorithms
 
 logger = logging.getLogger(__name__)
 
+MODEL_ALIASES = {
+    "NN": "neural_network",
+    "RF": "random_forest",
+    "KNN": "knn",
+    "DT": "decision_tree",
+    "NB": "naive_bayes",
+}
+
 
 class ModelTrainer:
     """Train and evaluate classification models"""
@@ -132,6 +140,8 @@ class ModelTrainer:
         Returns:
             tuple: (train_predictions, test_predictions, train_probabilities, test_probabilities)
         """
+        # Accept the short names compare_models() reports
+        model_type = MODEL_ALIASES.get(model_type, model_type)
         logger.info(f"Training {model_type} model (gridsearch={gridsearch})")
 
         if model_type == "random_forest":
@@ -307,7 +317,7 @@ class ModelTrainer:
             plt.savefig(save_path)
             logger.info(f"Confusion matrix saved to {save_path}")
 
-        plt.show()
+        plt.close()
 
     def plot_feature_importance(
         self, scores, features, title="Forward Feature Selection", save_path=None
@@ -334,7 +344,7 @@ class ModelTrainer:
             plt.savefig(save_path)
             logger.info(f"Feature importance plot saved to {save_path}")
 
-        plt.show()
+        plt.close()
 
     def plot_model_comparison(self, score_df, title="Model Performance Comparison", save_path=None):
         """
@@ -358,7 +368,7 @@ class ModelTrainer:
             plt.savefig(save_path)
             logger.info(f"Model comparison plot saved to {save_path}")
 
-        plt.show()
+        plt.close()
 
     def save_model(self, model_predictions, model_name="model.pkl"):
         """
