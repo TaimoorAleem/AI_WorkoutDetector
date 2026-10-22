@@ -49,6 +49,23 @@ FEATURE_CONFIG = {
     "pca_components": 3,
 }
 
+# Repetition counting configuration (low-pass filter + local maxima)
+# NOTE: "expected_reps" is an ASSUMPTION derived from the dataset's load category
+# (heavy sets = 5 reps, medium sets = 10 reps), not annotated ground truth.
+REP_CONFIG = {
+    "sampling_frequency": 5.0,
+    "order": 10,
+    "default": {"column": "acc_r", "cutoff": 0.4},
+    "exercises": {
+        "bench": {"column": "acc_r", "cutoff": 0.4},
+        "squat": {"column": "acc_r", "cutoff": 0.35},
+        "row": {"column": "gyr_x", "cutoff": 0.65},
+        "ohp": {"column": "acc_r", "cutoff": 0.35},
+        "dead": {"column": "acc_r", "cutoff": 0.4},
+    },
+    "expected_reps": {"heavy": 5, "medium": 10},
+}
+
 # Training configuration
 TRAIN_CONFIG = {"test_size": 0.2, "validation_size": 0.15, "random_state": 42, "stratify": True}
 
