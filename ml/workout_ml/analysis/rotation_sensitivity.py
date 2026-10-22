@@ -31,9 +31,18 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from joblib import Parallel, delayed  # noqa: E402
-from scipy.spatial.transform import Rotation  # noqa: E402
 
 from workout_ml import config, tracking  # noqa: E402
+from workout_ml.augment import (  # noqa: E402
+    ACC_COLS,  # noqa: F401 (re-exported)
+    GYR_COLS,  # noqa: F401 (re-exported)
+    augment_sets,
+    engineer_augmented,
+    random_rotations,
+    random_unit_axes,
+    rotate_sensor_frame,
+    rotation_matrix,
+)
 from workout_ml.data.preprocessor import DataLoader, OutlierRemover  # noqa: E402
 from workout_ml.features.engineer_features import FeatureEngineer  # noqa: E402
 from workout_ml.features.TemporalAbstraction import NumericalAbstraction  # noqa: E402
@@ -42,8 +51,6 @@ from workout_ml.models import lopo  # noqa: E402
 logger = logging.getLogger(__name__)
 
 EXPERIMENT = "proprio-sensitivity"
-ACC_COLS = ["acc_x", "acc_y", "acc_z"]
-GYR_COLS = ["gyr_x", "gyr_y", "gyr_z"]
 MAG_COLS = ["acc_r", "gyr_r"]
 THETAS = (0, 2, 5, 10, 15, 20, 30)
 N_RANDOM_AXES = 10
@@ -75,18 +82,6 @@ PLOT_PATH = config.PROJECT_ROOT / "docs" / "reports" / "phase1-rotation-sensitiv
 
 
 # --------------------------------------------------------------------------- rotations
-def rotation_matrix(axis, theta_deg):
-    """3x3 rotation of ``theta_deg`` degrees about ``axis`` (normalised)."""
-    axis = np.asarray(axis, dtype=float)
-    axis = axis / np.linalg.norm(axis)
-    return Rotation.from_rotvec(axis * np.deg2rad(theta_deg)).as_matrix()
-
-
-def random_unit_axes(n, rng):
-    v = rng.normal(size=(n, 3))
-    return v / np.linalg.norm(v, axis=1, keepdims=True)
-
-
 def build_conditions(thetas=THETAS, n_random=N_RANDOM_AXES, seed=AXIS_SEED):
     """List of (theta, axis_name, R). theta=0 appears once (axis ``none``)."""
     rng = np.random.default_rng(seed)
@@ -102,27 +97,18 @@ def build_conditions(thetas=THETAS, n_random=N_RANDOM_AXES, seed=AXIS_SEED):
     return out
 
 
-def rotate_sensor_columns(df, R, rows=None):
-    """Copy of ``df`` with acc and gyro triples multiplied by ``R`` (v' = R v).
-
-    ``rows``: optional positional index array; only those rows are rotated.
-    """
-    out = df.copy()
-    sel = slice(None) if rows is None else rows
-    for cols in (ACC_COLS, GYR_COLS):
-        values = out[cols].to_numpy(dtype=float).copy()
-        values[sel] = values[sel] @ R.T
-        out[cols] = values
-    return out
+# the shared implementation lives in workout_ml.augment (D-018)
+rotate_sensor_columns = rotate_sensor_frame
 
 
 def rotate_sets_randomly(df, rng, max_deg=AUG_MAX_DEG):
     """Rotate each set by its own random R (angle ~ U[0, max_deg], random axis)."""
     out = df.copy()
-    for _, rows in df.groupby("set", sort=True).indices.items():
-        axis = random_unit_axes(1, rng)[0]
-        theta = rng.uniform(0.0, max_deg)
-        out = rotate_sensor_columns(out, rotation_matrix(axis, theta), rows)
+    set_rows = df.groupby("set", sort=True).indices
+    for (_, rows), R in zip(
+        set_rows.items(), random_rotations(len(set_rows), max_deg, rng), strict=True
+    ):
+        out = rotate_sensor_frame(out, R, rows)
     return out
 
 
@@ -161,10 +147,7 @@ def magnitude_columns(columns):
 
 def load_cleaned():
     """Same steps as pipeline.py: load, merge, resample (200 ms), clean outliers."""
-    loader = DataLoader(config.RAW_DATA_PATH)
-    acc_df, gyr_df = loader.load_data()
-    merged = loader.merge_sensors(acc_df, gyr_df)
-    resampled = loader.resample_data(merged, sampling_rule="200ms")
+    resampled = DataLoader(config.RAW_DATA_PATH).load_data()  # reader -> CSF-1, 200 ms bins
     oc = config.OUTLIER_CONFIG
     return OutlierRemover.clean_outliers(
         resampled,
@@ -270,8 +253,7 @@ def run_analysis(cleaned, n_jobs=-1, variants=VARIANTS):
         if v in AUG_VARIANTS:
             k, max_deg = AUG_VARIANTS[v]
             logger.info("Featurizing %d augmentation copies for %s", k, v)
-            rng = np.random.default_rng(AUG_SEED)
-            aug[v] = [engineer(rotate_sets_randomly(cleaned, rng, max_deg)) for _ in range(k)]
+            aug[v] = engineer_augmented(augment_sets(cleaned, k, max_deg, AUG_SEED), engineer)
 
     logger.info("Featurizing %d participants x %d rotations", len(participants), len(conditions))
     jobs, keys = [], []
@@ -299,7 +281,7 @@ def run_analysis(cleaned, n_jobs=-1, variants=VARIANTS):
                 train0[list(mag_fs.columns)], train0["label"]
             )
         for v, copies in aug.items():
-            train2 = pd.concat([train0] + [a[a["participant"] != p] for a in copies])
+            train2 = pd.concat([train0, copies[copies["participant"] != p]])
             models[v] = lopo.build_pipeline(base_fs, MODEL).fit(
                 train2[list(base_fs.columns)], train2["label"]
             )
