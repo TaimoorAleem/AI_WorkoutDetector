@@ -20,7 +20,7 @@
 ## Blockers / open questions
 - Rep counter fails every §6.5 rep gate on its own (training) data after cleaning: MAE 1.05, exact 40%, ±1 81%, OHP MAE 1.90. Optimistic (cutoffs tuned on this data; expected reps assumed). Phase 4 rework is mandatory.
 - Resolved (D-018): the baseline tolerated only 2° of misalignment; rotation augmentation (≤30°, K=8) raises it to 10°. Now the default training regime (A1).
-- Open: with augmentation the best model became temporal/KNN (set acc 0.986), but θ_tol was only measured for the NN. KNN/RF sensitivity run in progress; don't treat KNN as production until it's measured.
+- Resolved (D-021): temporal/KNN with augmentation tolerates 15° (NN 10°), and is the production candidate. RF scores 0° only because one set flips at 2°; the 2 pp set-accuracy limit is finer than one set in a small fold.
 
 ## Phase checklists
 
@@ -47,8 +47,9 @@
 - [x] [S] P1 Gradle 9.8 / AGP 9.4 / Kotlin 2.4 project; `:protocol` (writer, reader, zip, resolver, stats), JSON Schemas, deterministic golden sessions, Python reader + CLI; 24 Kotlin + 22 Python tests
 - [x] [O] Data Layer contract in `:protocol` (`DataLayer.kt`: paths, capabilities, payloads)
 - [x] [S] A1 Rotation augmentation default (`workout_ml/augment.py`); `--no-augment` reproduces Phase 0 exactly; augmented NN matches R2w8; new best temporal/KNN 0.966 / 0.959 / 0.986; runtime 20 min (7 min without)
-- [ ] [S] Rotation sensitivity for KNN and RF (baseline vs R2w8)
-- [ ] [S] P2 `:wear` ‖ [S] P3 `:mobile`
+- [x] [S] Rotation sensitivity for KNN and RF: KNN/R2w8 θ_tol 15°, RF/R2w8 0° (single-set artifact), KNN/baseline 5°, RF/baseline 0°
+- [x] [S] P2 `:wear` (46 JVM tests; explicit LSM6DSO sensor selection; hash-verified transfer; orphan recovery) ‖ [x] [S] P3 `:mobile` (29 tests; labels bound to watch segment ids in either arrival order; review + export)
+- [x] [O] Both apps installed on the owner's Galaxy Watch5 Pro (SM-R920, Wear OS 5 / API 34, LSM6DSO IMU) and Galaxy S25 Ultra (Android 17 / API 37)
 - [ ] [S] P4 `android-ci.yml`
 - [ ] [U] Smoke test on watch or emulator; record measured rate/jitter
 
@@ -84,6 +85,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: P2, P3 and the KNN/RF sensitivity follow-up merged. Watch and phone paired over adb Wi-Fi; both apps installed; first end-to-end smoke test in progress.
 - 2026-10-22: P1, Data Layer contract and A1 merged. All three Sonnet agents hit the usage limit at once and resumed after the 2:10 pm reset (work was saved in worktrees). A1 found that `rotation_sensitivity.py` had been broken on `dev` since S1 removed the old loader methods; its tests didn't exercise that path.
 - 2026-10-22: Phase 2 spec written. Android SDK present (platforms 30–36.1, JBR 21, phone AVD); no Wear OS image or cmdline-tools yet. Owner AFK with watch off; device steps deferred.
 - 2026-10-22: Phase 1 complete. S2b and S2a merged; R2w/R2w8 follow-up run; D-018 recorded; Phase 1 review written.
