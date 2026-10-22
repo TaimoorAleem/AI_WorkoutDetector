@@ -44,6 +44,10 @@ SEGMENTS_HEADER = "segment_id,t_start_ns,t_end_ns,source,step"
 KINDS = ("set", "rest", "other", "calibration", "unlabeled")
 
 
+# Convention (mobile README): the label schema has no "discarded" kind, so it is kind "other" + this note.
+DISCARDED_NOTE = "discarded"
+
+
 class SessionFormatError(ValueError):
     """The session does not conform to Raw Format v1 (schema violation, bad CSV, wrong version)."""
 
@@ -307,12 +311,14 @@ class Session:
             ]
         )
 
-    def segments(self, kinds=None) -> list[SensorSet]:
+    def segments(self, kinds=None, include_discarded: bool = False) -> list[SensorSet]:
         """Slice into ``SensorSet``s (``[start, end)``), optionally only the given ``kinds``.
 
         Each set's ``meta`` has ``label`` (the exercise for sets, else the kind), ``kind``,
         ``category``, ``reps_user``, ``participant``, ``segment_id``, ``session_id`` and more.
         A segment with no samples of one sensor yields an empty stream for it.
+        Segments the phone user discarded as accidental (``note == "discarded"``, kind ``other``)
+        are skipped unless ``include_discarded`` is true; the raw watch data is never altered.
         """
         if isinstance(kinds, str):
             kinds = (kinds,)
@@ -321,6 +327,8 @@ class Session:
         participant = (self.labels or {}).get("participant_id")
         for seg in self.resolved_segments():
             if wanted is not None and seg.kind not in wanted:
+                continue
+            if not include_discarded and seg.note == DISCARDED_NOTE:
                 continue
             a0, a1 = np.searchsorted(self._t_acc, [seg.t_start_ns, seg.t_end_ns], side="left")
             g0, g1 = np.searchsorted(self._t_gyr, [seg.t_start_ns, seg.t_end_ns], side="left")
