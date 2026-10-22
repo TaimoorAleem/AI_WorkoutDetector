@@ -1,6 +1,6 @@
 # Proprio — Project Specification (source of truth)
 
-> **Status:** v1.0 · last updated 2026-10-21
+> **Status:** v1.1 · last updated 2026-10-22 (added MLflow, D-015)
 > This document is the single source of truth for Proprio's scope, features, architecture and technical specs.
 > **Rules:** scope changes require the owner's approval and must be logged in [`DECISIONS.md`](DECISIONS.md). Task status lives in [`PROGRESS.md`](PROGRESS.md), not here.
 
@@ -29,6 +29,7 @@ Proprio is a gym logger:
 | PostgreSQL (+pgvector), RabbitMQ, IBM COS | planned |
 | LLM coach: Granite on watsonx.ai, RAG + tool calls | planned |
 | CI/CD to IBM Cloud Code Engine, model regression gate | planned |
+| MLflow experiment tracking, model registry, LLM eval runs | planned |
 | Per-user personalization from corrections | planned |
 | Stretch: live on-watch rep counter (Kotlin), Helm/K8s, Granite LoRA | stretch |
 
@@ -80,6 +81,8 @@ Proprio is a gym logger:
      │                              IBM Cloud Object Storage (raw sets, DVC remote)
      └──── coach-svc (Python, FastAPI): RAG over pgvector + history tools
                  └─► watsonx.ai (Granite Instruct + granite-embedding); Ollama Granite locally/CI
+ ML lifecycle: MLflow tracking server + model registry (Code Engine; backend DB on the same Postgres
+               instance, artifacts in COS). inference-svc loads models:/proprio-classifier@production
  Deploy: UBI-based images → IBM Container Registry → IBM Cloud Code Engine
          Postgres: IBM Cloud Databases · RabbitMQ: IBM Cloud Messages for RabbitMQ
          Local dev: docker-compose (MinIO stands in for COS)
@@ -121,7 +124,8 @@ Proprio is a gym logger:
 | RabbitMQ | set.uploaded → inference; set.analyzed; personalization jobs | Decoupling, retries, DLQ. Kafka is overkill | should |
 | Linux (RHEL UBI) | `ubi9/openjdk-21-runtime`, `ubi9/python-311`, non-root | Natural fit | should |
 | Automated testing | JUnit 5 + Testcontainers; Android JUnit/Robolectric + Espresso/Compose UI; REST Assured E2E; pytest + hypothesis | No web UI, so Selenium/Puppeteer have nothing real to drive | must |
-| DVC | Versioned datasets and models, COS remote | Reproducible retraining | must |
+| DVC | Versioned datasets, COS remote | Reproducible retraining. DVC versions **data**; MLflow tracks **runs and models** | must |
+| MLflow | Experiment tracking (every training run: params, LOPO + watch-val metrics, confusion matrices, DVC data hash, git SHA); model registry with aliases `candidate` / `production` used by the CI gate and inference-svc; `mlflow.evaluate` + prompt versions for the coach golden set | Strong fit: replaces ad-hoc CSV/PNG outputs and the JSON model card. Tracing coach tool calls is optional | must |
 | Security | §9 | | must |
 
 ## 6. Sensor calibration and validation spec
@@ -225,8 +229,9 @@ Proprio is a gym logger:
 ### 6.7 Pipeline and CI integration
 - **DVC stages:** `ingest_metamotion` → `ingest_watch` → `canonicalize` → `features` → `train` → `evaluate`.
 - **Datasets:** `metamotion-v1` (immutable), `watch-calib-v1`, `watch-val-v1` (frozen, never trained on), `watch-train-vN`. Remote: COS.
-- **Model artifacts:** `model.onnx` and `model_card.json` (dataset hashes, git SHA, profile id, metrics, thresholds).
-- **CI `model-regression` job:** runs on changes to `ml/**` or `profiles/**`. Fails if any gate fails, or the candidate regresses by more than 2 pp vs the production model card.
+- **Experiment tracking:** every pipeline run logs to MLflow (experiment `proprio-classifier`): config params, CV scheme, metrics per gate, confusion matrix and feature-selection plots, `dvc.lock` data hashes, git SHA, device profile id.
+- **Model artifacts:** registered in the MLflow model registry as `proprio-classifier` (ONNX flavor plus a model card with dataset hashes, profile id, metrics and thresholds). Aliases: `candidate` (latest passing CI) and `production` (promoted by the owner or a release tag). Rollback = move the alias.
+- **CI `model-regression` job:** runs on changes to `ml/**` or `profiles/**`. Fails if any gate fails, or the candidate regresses by more than 2 pp vs the model behind the `production` alias. On pass, it registers the run's model with alias `candidate`.
 - **Reproducibility:** fixed seeds, a locked environment, and `dvc repro` reproduces the model hash-for-hash.
 
 ## 7. Phases and acceptance criteria
@@ -234,18 +239,18 @@ Legend: [O] orchestrator (Opus) · [S] Sonnet subagent · [U] owner (physical) �
 
 | Phase | Weeks | Goal | Acceptance |
 |---|---|---|---|
-| 0 Hygiene + honest baseline | 1 | `ml/workout_ml` package, Python 3.11, locked requirements, DVC, rep counter as a library, leakage fixes, LOPO, CI (ruff + pytest) | CI green; pipeline produces a LOPO baseline report (window F1, set accuracy, rep MAE) |
+| 0 Hygiene + honest baseline | 1 | `ml/workout_ml` package, Python 3.11, locked requirements, DVC, rep counter as a library, leakage fixes, LOPO, CI (ruff + pytest), MLflow tracking (local server) | CI green; pipeline logs a LOPO baseline run to MLflow (window F1, set accuracy, rep MAE) |
 | 1 CSF-1 layer | 2–3 | `sensors/`, tests, fake-watch generator, pipeline on CSF | §6.3 tests pass; fake-watch within 1 pp |
 | 2 Wear OS + phone recorder | 3–5 | `:protocol`, `:wear`, `:mobile`, Python Raw v1 reader | a recorded set opens in Python; rate and jitter in metadata; calibration mode works |
 | 3 Calibration + domain shift | 5–6 | U1/U2/U3, eval harness, profile fit, `watch-val-v1` frozen | domain-shift report with all gates evaluated |
-| 4 Remediation + PyTorch | 6–8 | decision tree, robust features, 1D-CNN → ONNX, rep re-tune, CI gate | model passes gates (or provisional); `dvc repro` reproducible |
-| 5 Services MVP | 8–10 | OpenAPI contract, core-api, inference-svc, compose, phone integration, REST Assured E2E | watch → result on phone in < 3 s locally; DLQ/retry demonstrated |
-| 6 LLM coach + RAG | 10–11 | coach-svc, pgvector, Granite (watsonx; Ollama fallback), golden-set eval, phone chat | answers cite sources; ≥ 90% golden pass; injection prompts refused |
-| 7 CI/CD + IBM Cloud + security | 11–12 | full workflows, Trivy, CodeQL, ICR, Code Engine, IBM Databases/RabbitMQ provisioning | tag → deployed; phone works against cloud; all gates green |
+| 4 Remediation + PyTorch | 6–8 | decision tree, robust features, 1D-CNN → ONNX, rep re-tune, CI gate, MLflow model registry + aliases | model passes gates (or provisional); `dvc repro` reproducible |
+| 5 Services MVP | 8–10 | OpenAPI contract, core-api, inference-svc (loads `@production` from the MLflow registry), compose (+ MLflow server), phone integration, REST Assured E2E | watch → result on phone in < 3 s locally; DLQ/retry demonstrated |
+| 6 LLM coach + RAG | 10–11 | coach-svc, pgvector, Granite (watsonx; Ollama fallback), golden-set eval logged with `mlflow.evaluate` and versioned prompts, phone chat | answers cite sources; ≥ 90% golden pass; injection prompts refused |
+| 7 CI/CD + IBM Cloud + security | 11–12 | full workflows, Trivy, CodeQL, ICR, Code Engine, IBM Databases/RabbitMQ provisioning, MLflow server (Postgres backend, COS artifacts, auth; reachable only by CI and services) | tag → deployed; phone works against cloud; all gates green |
 | 8 Personalization + stretch | 12+ | per-user heads via RabbitMQ jobs; stretch items | per-user check improves before activation |
 
 ## 8. Testing and CI/CD
-- **Python:** pytest + hypothesis, golden files (Raw v1 ↔ CSF), model-regression gate, RAG golden set.
+- **Python:** pytest + hypothesis, golden files (Raw v1 ↔ CSF), model-regression gate (against the MLflow `production` alias), RAG golden set (MLflow evaluation runs).
 - **Java:** JUnit 5, Spring slice tests, Testcontainers (Postgres, RabbitMQ).
 - **Android:** JUnit + Robolectric, Espresso/Compose UI tests, one instrumented smoke test.
 - **API E2E:** REST Assured + JUnit against docker-compose.

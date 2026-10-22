@@ -30,7 +30,7 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
 - **CSF-1** (`PROJECT.md` §6.3) is the only path into models. Raw sensor data is immutable and always kept. Conversion happens server-side in shared Python.
 - Leakage-safe evaluation only: LOPO for MetaMotion, grouped by session for watch data. Never a random split over windows.
 - Model changes must pass the gates in `PROJECT.md` §6.5.
-- No pickles, datasets or generated plots in git. Use DVC (once set up) and `.gitignore`.
+- No pickles, datasets or generated plots in git. Data goes in DVC; runs, metrics, plots and models go in MLflow.
 
 ## Key sensor facts (verified from raw files; don't re-derive)
 - MetaMotion: accelerometer in **g**, gravity included; gyroscope in **deg/s**.
