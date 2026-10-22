@@ -98,7 +98,7 @@ File name: `proprio-session-<session_id>.zip`. Contents:
 - Use the latest **stable** AGP and Kotlin that resolve. `compileSdk = 36`, `targetSdk = 36`.
   - Watch `minSdk = 30` (Wear OS 3 = Galaxy Watch4, the oldest Galaxy Watch with Wear OS).
   - Phone `minSdk = 29`.
-- Package ids: `dev.proprio.wear` and `dev.proprio.mobile`, sharing an `applicationId`-compatible signing setup for the Data Layer. Debug builds use the same default debug keystore, so they pair. (The owner hasn't overridden the default package id; PROGRESS lists it as a pending confirmation.)
+- **Both apps use the same `applicationId`, `dev.proprio`** (namespaces stay `dev.proprio.wear` / `dev.proprio.mobile`). *(Corrected after the first device test, D-022: the Wearable Data Layer only connects apps with the same package name and signing key; the original different ids meant the phone never saw the watch.)* Debug builds share the default debug keystore.
 
 **Modules**
 - **`:protocol`**: pure Kotlin/JVM library with no Android dependency.

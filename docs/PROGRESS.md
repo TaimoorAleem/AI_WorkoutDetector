@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 2: Wear OS + phone recorder (Phases 0 and 1 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** P2 (`:wear`) ‖ P3 (`:mobile`) running; rotation-sensitivity rerun for KNN/RF (the new best model with augmentation) running. Then P4 (Android CI), then the owner's device smoke test.
+- **Next step:** P2b: stop Samsung Freecess from freezing the watch recorder (D-023). Then re-run the device test (zero gaps > 100 ms during a 5-min screen-off session), then P4 (Android CI).
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
@@ -18,6 +18,8 @@
 - [ ] Create IBM Cloud account; approve resources and secrets (Phase 7)
 
 ## Blockers / open questions
+- **Blocker (D-023):** Samsung Freecess freezes the watch app (`FZ … reason: LEV`) about 15–20 s after the screen turns off, despite the health foreground service and the partial wake lock. Samples are lost until Data Layer traffic unfreezes it. The battery allow-list (`deviceidle whitelist`) does not help.
+- Watch-started sets inherit the phone's current exercise selection; the owner's squat got labeled OHP. The phone's rep picker must also ask for the exercise on watch-started sets.
 - Rep counter fails every §6.5 rep gate on its own (training) data after cleaning: MAE 1.05, exact 40%, ±1 81%, OHP MAE 1.90. Optimistic (cutoffs tuned on this data; expected reps assumed). Phase 4 rework is mandatory.
 - Resolved (D-018): the baseline tolerated only 2° of misalignment; rotation augmentation (≤30°, K=8) raises it to 10°. Now the default training regime (A1).
 - Resolved (D-021): temporal/KNN with augmentation tolerates 15° (NN 10°), and is the production candidate. RF scores 0° only because one set flips at 2°; the 2 pp set-accuracy limit is finer than one set in a small fold.
@@ -51,7 +53,8 @@
 - [x] [S] P2 `:wear` (46 JVM tests; explicit LSM6DSO sensor selection; hash-verified transfer; orphan recovery) ‖ [x] [S] P3 `:mobile` (29 tests; labels bound to watch segment ids in either arrival order; review + export)
 - [x] [O] Both apps installed on the owner's Galaxy Watch5 Pro (SM-R920, Wear OS 5 / API 34, LSM6DSO IMU) and Galaxy S25 Ultra (Android 17 / API 37)
 - [ ] [S] P4 `android-ci.yml`
-- [ ] [U] Smoke test on watch or emulator; record measured rate/jitter
+- [x] [U] First device smoke test: transfer, hash ack and label binding work end to end. Watch timing: 49.8 Hz, p50 20.08 ms, p99 20.11 ms (≈0.03 ms jitter), acc-gyr offset 0–20 ms, drift < 1 ms; LSM6DSO sensors selected; accelerometer range ±8 g
+- [ ] [S] P2b Freecess-proof recording + debug start/stop hook + watch-started set exercise prompt; [O] device test matrix
 
 ### Phase 3: calibration + domain shift
 - [ ] [U] U1, U2 (×2), U3
@@ -85,6 +88,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: First real-device tests. Fixed the Data Layer: both apps now share `applicationId` dev.proprio (D-022). Recording works, but Samsung Freecess freezes the watch app (D-023); allow-listing didn't help and was reverted.
 - 2026-10-22: P2, P3 and the KNN/RF sensitivity follow-up merged. Watch and phone paired over adb Wi-Fi; both apps installed; first end-to-end smoke test in progress.
 - 2026-10-22: P1, Data Layer contract and A1 merged. All three Sonnet agents hit the usage limit at once and resumed after the 2:10 pm reset (work was saved in worktrees). A1 found that `rotation_sensitivity.py` had been broken on `dev` since S1 removed the old loader methods; its tests didn't exercise that path.
 - 2026-10-22: Phase 2 spec written. Android SDK present (platforms 30–36.1, JBR 21, phone AVD); no Wear OS image or cmdline-tools yet. Owner AFK with watch off; device steps deferred.
