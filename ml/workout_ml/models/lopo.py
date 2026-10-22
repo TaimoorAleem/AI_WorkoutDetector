@@ -299,6 +299,34 @@ def fit_estimator(pipeline, X, y, groups, *, tune=False, grid=None, inner_splits
     return pipeline.fit(X, y), info
 
 
+@dataclass
+class AugmentedTrain:
+    """Featurised augmented copies, usable as extra *training* rows only (D-018).
+
+    ``participants`` is the source participant of each row; in a LOPO fold the rows of the
+    held-out participant are dropped, so no copy of a held-out set is ever trained on.
+    """
+
+    X: pd.DataFrame
+    y: np.ndarray
+    participants: np.ndarray
+
+
+def training_rows(X, y, participants, train, held_out, augment=None):
+    """Training (X, y, groups) of a fold: originals ``train`` plus augmented copies of the
+    training participants' sets (copies of ``held_out`` are excluded)."""
+    X_tr, y_tr, g_tr = X.iloc[train], y[train], participants[train]
+    if augment is None:
+        return X_tr, y_tr, g_tr
+    keep = np.asarray(augment.participants) != held_out
+    X_tr = pd.concat([X_tr, augment.X.loc[keep, list(X.columns)]])
+    return (
+        X_tr,
+        np.concatenate([y_tr, np.asarray(augment.y)[keep]]),
+        np.concatenate([g_tr, np.asarray(augment.participants)[keep]]),
+    )
+
+
 def evaluate_lopo(
     X,
     y,
@@ -311,6 +339,7 @@ def evaluate_lopo(
     inner_splits=4,
     selector=None,
     selection_cache=None,
+    augment=None,
 ):
     """Leave-one-participant-out evaluation of one (feature_set, model) combination.
 
@@ -320,6 +349,8 @@ def evaluate_lopo(
         selector: optional ``f(X_train, y_train, groups_train) -> list[str]`` (forward
             selection). Run on the training fold only; results cached per fold in
             ``selection_cache`` so every model of the feature set shares one selection.
+        augment: optional ``AugmentedTrain``; its rows (minus the held-out participant's)
+            are added to the training rows of each fold. Test rows are never augmented.
     """
     y = np.asarray(y)
     participants = np.asarray(participants)
@@ -332,22 +363,23 @@ def evaluate_lopo(
     for fold, (train, test) in enumerate(lopo_splits(participants)):
         held_out = participants[test][0]
         assert held_out not in set(participants[train]), "participant in both train and test"
+        X_tr, y_tr, g_tr = training_rows(X, y, participants, train, held_out, augment)
         selected = None
         if selector is not None:
             key = held_out
             if selection_cache is not None and key in selection_cache:
                 selected = selection_cache[key]
             else:
-                selected = selector(X.iloc[train], y[train], participants[train])
+                selected = selector(X_tr, y_tr, g_tr)
                 if selection_cache is not None:
                     selection_cache[key] = selected
         cols = list(selected) if selected is not None else list(X.columns)
         fs = feature_set if selected is None else selected_feature_set(selected)
         estimator, info = fit_estimator(
             build_pipeline(fs, model_name),
-            X.iloc[train][cols],
-            y[train],
-            participants[train],
+            X_tr[cols],
+            y_tr,
+            g_tr,
             tune=tune,
             grid=grid,
             inner_splits=inner_splits,

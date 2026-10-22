@@ -48,8 +48,8 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
   - `workout_ml/data/preprocessor.py`: `DataLoader` (file discovery, set IDs from file stems, duplicates; `load_sets()` -> SensorSets, `load_data()` -> reader -> `to_csf` per set -> one DataFrame), `OutlierRemover.clean_outliers` (per-set mark NaN + interpolate).
   - `workout_ml/features/`: `FeatureEngineer` (per-set, no `duration`, no PCA), filters, temporal and FFT features.
   - `workout_ml/models/lopo.py`: in-fold `PCAFeatures`, feature sets, model pipelines, LOPO evaluation and set-level majority vote. `models/experiment.py`: runs every feature set x model and tracks it in MLflow.
-  - `workout_ml/tracking.py`, `workout_ml/reporting.py`: MLflow setup/provenance and the generated report (`docs/reports/phase0-baseline.md`).
-  - `workout_ml/pipeline.py`: end-to-end pipeline (`main()`); flags `--tune`, `--forward-selection`, `--models`. MLflow store defaults to `sqlite:///<repo>/mlflow.db` (override with `MLFLOW_TRACKING_URI`); view with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
+  - `workout_ml/tracking.py`, `workout_ml/reporting.py`: MLflow setup/provenance and the generated report (`docs/reports/current-baseline.md`; `phase0-baseline.md` is frozen).
+  - `workout_ml/pipeline.py`: end-to-end pipeline (`main()`); flags `--tune`, `--forward-selection`, `--no-augment`, `--models`. Trains with rotation augmentation by default (D-018, `EVAL_CONFIG["augmentation"]`, shared code in `workout_ml/augment.py`); `--no-augment` reproduces the Phase 0 baseline. MLflow store defaults to `sqlite:///<repo>/mlflow.db` (override with `MLFLOW_TRACKING_URI`); view with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
   - `workout_ml/reps/`: rep counting (`counter.py`: `count_set`, `count_peaks`; `evaluate.py`: per-set evaluation and summary).
   - `tests/`: pytest suite.
 - Raw data lives in `data/raw/MetaMotion/`, tracked by DVC (`data/raw/MetaMotion.dvc`, local remote `E:/dvc-store/proprio`). Run `dvc pull` to fetch.

@@ -46,10 +46,12 @@ def _rank(leaderboard):
     ).reset_index(drop=True)
 
 
-def _log_child(result, feature_set, model_name, tune, forward, run_name):
+def _log_child(result, feature_set, model_name, tune, forward, run_name, aug_params, aug_tag):
     """Params, metrics and artifacts for one (feature_set, model) child run."""
+    mlflow.set_tag("augmentation", aug_tag)
     mlflow.log_params(
         {
+            **aug_params,
             "model": model_name,
             "feature_set": feature_set.name,
             "n_features": feature_set.n_features,
@@ -126,8 +128,16 @@ def run_experiment(
     report_path=None,
     n_sets=None,
     notes=None,
+    augmented_df=None,
+    augmentation=None,
 ):
-    """Run LOPO for every feature set x model and track everything in MLflow."""
+    """Run LOPO for every feature set x model and track everything in MLflow.
+
+    ``augmented_df``: featurised augmented copies (``augment.engineer_augmented``), used as
+    extra training rows in every fold (those of the held-out participant excluded) and in the
+    final refit. ``augmentation``: the augmentation config (logged); defaults to
+    ``EVAL_CONFIG["augmentation"]`` and is reported as off when ``augmented_df`` is None.
+    """
     models = list(models or DEFAULT_MODELS)
     eval_cfg = config.EVAL_CONFIG
     inner_splits = eval_cfg["inner_cv_splits"]
@@ -139,6 +149,26 @@ def run_experiment(
     sets = featured_df["set"].to_numpy()
     n_sets = int(n_sets if n_sets is not None else len(np.unique(sets)))
     n_windows = len(featured_df)
+
+    aug_cfg = dict(augmentation or eval_cfg.get("augmentation") or {})
+    aug_on = augmented_df is not None and len(augmented_df) > 0
+    aug_cfg["enabled"] = bool(aug_on)
+    augment = None
+    if aug_on:
+        aug_meta = [c for c in [*METADATA_COLUMNS, "aug_of", "aug_copy"] if c in augmented_df]
+        augment = lopo.AugmentedTrain(
+            X=augmented_df.drop(columns=aug_meta).reset_index(drop=True),
+            y=augmented_df["label"].to_numpy(),
+            participants=augmented_df[eval_cfg["group_column"]].to_numpy(),
+        )
+    aug_params = {
+        "aug_enabled": aug_on,
+        "aug_copies": aug_cfg.get("copies") if aug_on else 0,
+        "aug_max_deg": aug_cfg.get("max_deg") if aug_on else 0,
+        "aug_seed": aug_cfg.get("seed") if aug_on else "none",
+        "aug_n_rows": len(augmented_df) if aug_on else 0,
+    }
+    aug_tag = "on" if aug_on else "off"
 
     feature_sets = lopo.build_feature_sets(X.columns, config.FEATURE_CONFIG["pca_components"])
     selector = None
@@ -168,8 +198,14 @@ def run_experiment(
 
     results, child_ids = [], {}
     with mlflow.start_run(
-        run_name="phase0-baseline",
-        tags={"git.sha": sha, "git.dirty": dirty, "data.raw.md5": md5, "phase": "0"},
+        run_name="current-baseline" if aug_on else "phase0-baseline",
+        tags={
+            "git.sha": sha,
+            "git.dirty": dirty,
+            "data.raw.md5": md5,
+            "phase": "1" if aug_on else "0",
+            "augmentation": aug_tag,
+        },
     ) as parent:
         parent_id = parent.info.run_id
         for name, cfg in (run_params or {}).items():
@@ -182,6 +218,7 @@ def run_experiment(
                 "tune": tune,
                 "forward_selection": forward_selection,
                 "models": ",".join(models),
+                **aug_params,
             }
         )
 
@@ -203,8 +240,11 @@ def run_experiment(
                         inner_splits=inner_splits,
                         selector=selector if is_selected else None,
                         selection_cache=cache if is_selected else None,
+                        augment=augment,
                     )
-                    _log_child(result, fs, model_name, tune, is_selected, run_name)
+                    _log_child(
+                        result, fs, model_name, tune, is_selected, run_name, aug_params, aug_tag
+                    )
                     child_ids[(fs.name, model_name)] = child.info.run_id
                 results.append((fs, result))
 
@@ -235,12 +275,18 @@ def run_experiment(
             logger.warning("Best LOPO window accuracy >= 0.99: assume a leak and investigate")
 
         # Refit the best combination on all data and log it in its child run
+        # (originals plus all augmented copies when augmentation is on)
+        X_all, y_all, p_all = X, y, participants
+        if augment is not None:
+            X_all = pd.concat([X, augment.X[list(X.columns)]], ignore_index=True)
+            y_all = np.concatenate([y, augment.y])
+            p_all = np.concatenate([participants, augment.participants])
         final, X_fs = _refit_final(
             best_fs,
             best_result.model,
-            X,
-            y,
-            participants,
+            X_all,
+            y_all,
+            p_all,
             tune=tune,
             selector=selector if best_fs.name == "forward-selected" else None,
             inner_splits=inner_splits,
@@ -292,9 +338,10 @@ def run_experiment(
             n_sets=n_sets,
             n_windows=n_windows,
             notes=notes or [],
+            augmentation=aug_cfg,
         )
         with tempfile.TemporaryDirectory() as tmp:
-            report_file = Path(tmp) / "phase0-baseline.md"
+            report_file = Path(tmp) / "baseline-report.md"
             report_file.write_text(report, encoding="utf-8")
             mlflow.log_artifact(str(report_file))
             leaderboard_file = Path(tmp) / "leaderboard.csv"

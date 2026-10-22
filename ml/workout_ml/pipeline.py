@@ -3,7 +3,7 @@ End-to-end pipeline: load, per-set outlier handling, per-set features, LOPO eval
 tracked in MLflow, rep-counter evaluation and the baseline report.
 
 Usage:
-    python -m workout_ml.pipeline [--tune] [--forward-selection] [--models RF DT ...]
+    python -m workout_ml.pipeline [--tune] [--forward-selection] [--no-augment] [--models RF DT ...]
 """
 
 import argparse
@@ -16,6 +16,7 @@ import matplotlib
 matplotlib.use("Agg")  # headless: pipeline code never opens a window
 
 from workout_ml import config  # noqa: E402
+from workout_ml.augment import augment_sets, engineer_augmented  # noqa: E402
 from workout_ml.data.preprocessor import DataLoader, OutlierRemover  # noqa: E402
 from workout_ml.features.engineer_features import FeatureEngineer  # noqa: E402
 from workout_ml.models.experiment import DEFAULT_MODELS, run_experiment  # noqa: E402
@@ -35,6 +36,11 @@ def parse_args(argv=None):
         "--forward-selection",
         action="store_true",
         help="add a 'forward-selected' feature set, selected inside each training fold",
+    )
+    parser.add_argument(
+        "--no-augment",
+        action="store_true",
+        help="train on the original sets only (reproduces the Phase 0 baseline exactly)",
     )
     parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS, choices=DEFAULT_MODELS)
     parser.add_argument("--tracking-uri", default=None, help="overrides MLFLOW_TRACKING_URI")
@@ -66,8 +72,26 @@ def main(argv=None):
 
     # Step 2: per-set feature engineering
     logger.info("STEP 2: Engineering features (per set)")
-    featured_df = FeatureEngineer(config.FEATURE_CONFIG).engineer_features(cleaned_df)
+    engineer = FeatureEngineer(config.FEATURE_CONFIG).engineer_features
+    featured_df = engineer(cleaned_df)
     featured_df.to_pickle(config.INTERIM_DATA_PATH / "02_feature_engineered.pkl")
+
+    # Rotation augmentation (D-018): copies of every set, used as training rows only. Which
+    # copies enter a fold is decided in lopo.evaluate_lopo (never the held-out participant's).
+    aug_cfg = dict(config.EVAL_CONFIG["augmentation"])
+    aug_cfg["enabled"] = bool(aug_cfg["enabled"]) and not args.no_augment
+    augmented_df = None
+    if aug_cfg["enabled"]:
+        logger.info(
+            "Augmenting: %d copies per set, max %.0f deg, seed %d",
+            aug_cfg["copies"],
+            aug_cfg["max_deg"],
+            aug_cfg["seed"],
+        )
+        augmented_df = engineer_augmented(
+            augment_sets(cleaned_df, aug_cfg["copies"], aug_cfg["max_deg"], aug_cfg["seed"]),
+            engineer,
+        )
 
     # Step 3: rep counter (on cleaned, pre-feature data)
     logger.info("STEP 3: Evaluating the repetition counter")
@@ -80,21 +104,27 @@ def main(argv=None):
         f"Duplicate re-export files ignored by the loader: {len(loader.duplicate_files)}",
         f"Unpaired sets dropped (one sensor missing): {len(loader.unpaired_stems)}"
         + (f" ({', '.join(loader.unpaired_stems)})" if loader.unpaired_stems else ""),
-        f"Flags: tune={args.tune}, forward_selection={args.forward_selection}",
+        f"Flags: tune={args.tune}, forward_selection={args.forward_selection}, "
+        f"no_augment={args.no_augment}",
     ]
     outcome = run_experiment(
         featured_df,
         run_params={
             "outlier": config.OUTLIER_CONFIG,
             "features": config.FEATURE_CONFIG,
-            "eval": config.EVAL_CONFIG,
+            "eval": {**config.EVAL_CONFIG, "augmentation": aug_cfg},
         },
         rep_summary=rep_summary,
         models=args.models,
         tune=args.tune,
         forward_selection=args.forward_selection,
         tracking_uri=args.tracking_uri,
-        report_path=config.REPORT_PATH,
+        # a --no-augment run must not overwrite the committed current-baseline report
+        report_path=config.REPORT_PATH
+        if aug_cfg["enabled"]
+        else config.METRICS_DIR / "baseline-no-augment.md",
+        augmented_df=augmented_df,
+        augmentation=aug_cfg,
         n_sets=cleaned_df["set"].nunique(),
         notes=notes,
     )
