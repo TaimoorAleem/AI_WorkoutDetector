@@ -42,7 +42,8 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
 ## Current layout and commands
 - `ml/`: the installable `workout_ml` package (`ml/pyproject.toml`, locks in `ml/requirements.lock` and `ml/requirements-dev.lock`).
   - `workout_ml/config.py`: paths and pipeline config (`ensure_dirs()` creates output dirs).
-  - `workout_ml/data/preprocessor.py`: `DataLoader` (set IDs from file stems), `OutlierRemover.clean_outliers` (per-set mark NaN + interpolate).
+  - `workout_ml/sensors/`: CSF-1 layer (`types.py` RawStream/SensorSet, `transforms.py`, `resample.py`, `profiles.py` + `profiles/*.yaml`, `metamotion.py` reader, `convert.py` `to_csf`). Public API: `to_csf`, `from_canonical`, `load_profile`, `read_metamotion`. Spec: `docs/sensor_spec.md`.
+  - `workout_ml/data/preprocessor.py`: `DataLoader` (file discovery, set IDs from file stems, duplicates; `load_sets()` -> SensorSets, `load_data()` -> reader -> `to_csf` per set -> one DataFrame), `OutlierRemover.clean_outliers` (per-set mark NaN + interpolate).
   - `workout_ml/features/`: `FeatureEngineer` (per-set, no `duration`, no PCA), filters, temporal and FFT features.
   - `workout_ml/models/lopo.py`: in-fold `PCAFeatures`, feature sets, model pipelines, LOPO evaluation and set-level majority vote. `models/experiment.py`: runs every feature set x model and tracks it in MLflow.
   - `workout_ml/tracking.py`, `workout_ml/reporting.py`: MLflow setup/provenance and the generated report (`docs/reports/phase0-baseline.md`).
