@@ -39,7 +39,8 @@ screen turns off, and disables our partial wake lock, even with a `health` foreg
 | `ongoing` | Attaches a Wear OS **Ongoing Activity** (`androidx.wear:wear-ongoing`) to the recording notification: category workout, touch intent = open the app, status text = elapsed time. Shows the app as a chip on the watch face / launcher. | https://developer.android.com/training/wearables/ongoing-activity |
 | `ambient` | `MainActivity` registers an `AmbientLifecycleObserver` (`androidx.wear:wear`) so the recording screen stays the top activity in ambient mode instead of being backgrounded when the screen dims; the ambient face is a black, dim timer. No `FLAG_KEEP_SCREEN_ON`. **Only effective when the watch's Always-on display setting is on** (see results). | https://developer.android.com/training/wearables/apps/always-on |
 | `exercise` | Starts a **Health Services** exercise (`ExerciseType.STRENGTH_TRAINING`, no data types, no GPS, no auto-pause) for the whole session and ends it on session end and on app start (crash recovery). | https://developer.android.com/health-and-fitness/health-services/active-data |
-| `all` | All three. | |
+| `screen_on` | While recording, `MainActivity` holds `FLAG_KEEP_SCREEN_ON` with window brightness 0.01, so the app stays the TOP activity (hypothesis: Freecess does not freeze TOP). Cleared at session end. | https://developer.android.com/training/scheduling/wakelock#screen |
+| `all` | All four. | |
 
 The strategy lives in memory (`StrategyHolder`, default `all`); only the debug receiver below changes it.
 

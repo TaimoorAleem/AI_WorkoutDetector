@@ -53,6 +53,23 @@ class StrategySelectionTest {
     }
 
     @Test
+    fun screenOnIsItsOwnStrategyAndPartOfAll() {
+        assertEquals(Strategy.SCREEN_ON, Strategy.parse("screen_on"))
+        assertEquals(Triple(false, false, false), Triple(Strategy.SCREEN_ON.ongoing, Strategy.SCREEN_ON.ambient, Strategy.SCREEN_ON.exercise))
+        assertTrue(Strategy.SCREEN_ON.screenOn && Strategy.ALL.screenOn)
+        assertFalse(Strategy.NONE.screenOn || Strategy.ONGOING.screenOn || Strategy.AMBIENT.screenOn || Strategy.EXERCISE.screenOn)
+    }
+
+    @Test
+    fun screenIsHeldOnlyWhileRecordingWithAScreenOnStrategy() {
+        assertTrue(dev.proprio.wear.session.keepScreenOn(Strategy.SCREEN_ON, recording = true))
+        assertTrue(dev.proprio.wear.session.keepScreenOn(Strategy.ALL, recording = true))
+        assertFalse(dev.proprio.wear.session.keepScreenOn(Strategy.SCREEN_ON, recording = false)) // flag cleared at session end
+        assertFalse(dev.proprio.wear.session.keepScreenOn(Strategy.NONE, recording = true))
+        assertFalse(dev.proprio.wear.session.keepScreenOn(Strategy.EXERCISE, recording = true))
+    }
+
+    @Test
     fun holderPublishesChanges() {
         val h = StrategyHolder()
         h.current = Strategy.NONE
