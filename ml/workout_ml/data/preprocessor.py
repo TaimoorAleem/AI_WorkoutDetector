@@ -5,13 +5,15 @@ Data preprocessing module for cleaning and preparing sensor data
 
 import logging
 import re
-from glob import glob
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+SENSOR_FILE_RE = re.compile(r"^(?P<stem>.+?)_(?P<sensor>Accelerometer|Gyroscope)_")
 
 
 class DataLoader:
@@ -23,37 +25,70 @@ class DataLoader:
             data_path: Path to directory containing CSV files
         """
         self.data_path = Path(data_path)
+        #: Stems that lacked one of the two sensors (filled by load_data)
+        self.unpaired_stems = []
+        #: Duplicate re-export files that were ignored (filled by load_data)
+        self.duplicate_files = []
+
+    def _pair_files(self):
+        """Group files by stem (the part before _Accelerometer/_Gyroscope).
+
+        Returns:
+            dict: stem -> {"Accelerometer": path, "Gyroscope": path}, sorted by stem
+        """
+        pairs = {}
+        for f in sorted(self.data_path.glob("*.csv"), key=lambda p: p.name):
+            m = SENSOR_FILE_RE.match(f.name)
+            if m is None:
+                logger.warning(f"Ignoring file with unrecognised name: {f.name}")
+                continue
+            slot = pairs.setdefault(m.group("stem"), {})
+            if m.group("sensor") in slot:
+                # The raw export contains byte-identical re-exports (firmware suffix
+                # "1.4.41", timestamps shifted by +24 h). They are the same recording, so
+                # keep the first file (sorted order) and ignore the copy.
+                logger.warning(
+                    f"Ignoring duplicate {m.group('sensor')} file for set {m.group('stem')}: "
+                    f"{f.name} (keeping {slot[m.group('sensor')].name})"
+                )
+                self.duplicate_files.append(f.name)
+                continue
+            slot[m.group("sensor")] = f
+        return dict(sorted(pairs.items()))
 
     def load_data(self):
         """
-        Load and process all CSV files
+        Load and process all CSV files.
+
+        Set IDs are derived from the sorted, unique file stem (1-based), so they do
+        not depend on glob order. Stems missing one of the two sensors are logged as
+        WARNING and dropped (see ``self.unpaired_stems``).
 
         Returns:
             tuple: (accelerometer_df, gyroscope_df)
         """
-        files = glob(str(self.data_path / "*.csv"))
-        logger.info(f"Found {len(files)} files to process")
+        self.duplicate_files = []
+        pairs = self._pair_files()
+        self.unpaired_stems = [s for s, d in pairs.items() if len(d) < 2]
+        for stem in self.unpaired_stems:
+            have = ", ".join(pairs[stem])
+            logger.warning(f"Dropping unpaired set {stem}: only has {have}")
+        paired = [s for s, d in pairs.items() if len(d) == 2]
+        logger.info(
+            f"Found {len(paired)} paired sets ({len(self.unpaired_stems)} unpaired dropped)"
+        )
 
-        acc_df = pd.DataFrame()
-        gyr_df = pd.DataFrame()
-        acc_set = 1
-        gyr_set = 1
+        acc_frames, gyr_frames = [], []
+        for set_id, stem in enumerate(paired, start=1):
+            acc = self._load_single_file(pairs[stem]["Accelerometer"])
+            gyr = self._load_single_file(pairs[stem]["Gyroscope"])
+            acc["set"] = set_id
+            gyr["set"] = set_id
+            acc_frames.append(acc)
+            gyr_frames.append(gyr)
 
-        for f in files:
-            df = self._load_single_file(f)
-
-            if "Accelerometer" in f:
-                df["set"] = acc_set
-                acc_set += 1
-                acc_df = pd.concat([acc_df, df], ignore_index=True)
-            elif "Gyroscope" in f:
-                df["set"] = gyr_set
-                gyr_set += 1
-                gyr_df = pd.concat([gyr_df, df], ignore_index=True)
-
-        # Process timestamps
-        acc_df = self._process_timestamps(acc_df)
-        gyr_df = self._process_timestamps(gyr_df)
+        acc_df = self._process_timestamps(pd.concat(acc_frames, ignore_index=True))
+        gyr_df = self._process_timestamps(pd.concat(gyr_frames, ignore_index=True))
 
         logger.info(
             f"Loaded {len(acc_df)} accelerometer records and {len(gyr_df)} gyroscope records"
@@ -90,9 +125,8 @@ class DataLoader:
         return df
 
     def merge_sensors(self, acc_df, gyr_df):
-        """Merge accelerometer and gyroscope data"""
-        merged = pd.concat([acc_df.iloc[:, :3], gyr_df], axis=1)
-        merged.columns = [
+        """Merge accelerometer and gyroscope data, set by set"""
+        names = [
             "acc_x",
             "acc_y",
             "acc_z",
@@ -104,7 +138,13 @@ class DataLoader:
             "category",
             "set",
         ]
-        return merged
+        acc_by_set = {k: g for k, g in acc_df.groupby("set")}
+        merged = []
+        for set_id, gyr in gyr_df.groupby("set"):
+            m = pd.concat([acc_by_set[set_id].iloc[:, :3], gyr], axis=1, sort=True)
+            m.columns = names
+            merged.append(m)
+        return pd.concat(merged).sort_index(kind="stable")
 
     def resample_data(self, df, sampling_rule="200ms"):
         """
@@ -150,206 +190,110 @@ class DataLoader:
 
 
 class OutlierRemover:
-    """Remove outliers from sensor data"""
+    """Mark outliers as NaN and interpolate them, set by set.
+
+    No rows are dropped, so the uniform 200 ms sampling the filters assume is kept.
+    All statistics are computed within one set (scope="set"), which is computable at
+    inference time from the current set alone.
+
+    There is deliberately no per-label scope: it would need the label, which is not
+    known at inference, so it is supervised preprocessing and leaks the target.
+    """
 
     @staticmethod
     def mark_outliers_iqr(dataset, col):
-        """
-        Mark outliers using Interquartile Range (IQR) method
-
-        Args:
-            dataset: DataFrame
-            col: Column name to check for outliers
-
-        Returns:
-            DataFrame with outlier indicators
-        """
-        dataset = dataset.copy()
-
-        Q1 = dataset[col].quantile(0.25)
-        Q3 = dataset[col].quantile(0.75)
-        IQR = Q3 - Q1
-
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-
-        dataset[f"{col}_outlier"] = (dataset[col] < lower_bound) | (dataset[col] > upper_bound)
-
-        return dataset
+        """Return a boolean Series (True = outlier) using the IQR rule (1.5 * IQR)."""
+        q1 = dataset[col].quantile(0.25)
+        q3 = dataset[col].quantile(0.75)
+        iqr = q3 - q1
+        return (dataset[col] < q1 - 1.5 * iqr) | (dataset[col] > q3 + 1.5 * iqr)
 
     @staticmethod
     def mark_outliers_chauvenet(dataset, col, C=2):
-        """Mark outliers using Chauvenet's criterion
-
-        Finds outliers in the specified column and adds a binary column with
-        the same name extended with '_outlier'.
+        """Return a boolean Series (True = outlier) using Chauvenet's criterion.
 
         Args:
-            dataset: DataFrame
+            dataset: DataFrame (one set)
             col: Column name to check for outliers
             C: Degree of certainty for identification (typically 1-10, default: 2)
-
-        Returns:
-            DataFrame with outlier indicators
         """
-        import math
-
         import scipy.special
 
-        dataset = dataset.copy()
-
-        # Compute the mean and standard deviation
-        mean = dataset[col].mean()
-        std = dataset[col].std()
-        N = len(dataset.index)
-        criterion = 1.0 / (C * N)
-
-        # Consider the deviation for the data points
-        deviation = abs(dataset[col] - mean) / std
-
-        # Express the upper and lower bounds
-        low = -deviation / math.sqrt(C)
-        high = deviation / math.sqrt(C)
-        prob = []
-        mask = []
-
-        # Pass all rows in the dataset
-        for i in range(0, len(dataset.index)):
-            # Determine the probability of observing the point
-            prob.append(
-                1.0 - 0.5 * (scipy.special.erf(high.iloc[i]) - scipy.special.erf(low.iloc[i]))
-            )
-            # Mark as outlier when probability is below criterion
-            mask.append(prob[i] < criterion)
-
-        dataset[col + "_outlier"] = mask
-        return dataset
+        x = dataset[col]
+        std = x.std()
+        if not np.isfinite(std) or std == 0:
+            return pd.Series(False, index=dataset.index)
+        criterion = 1.0 / (C * len(x))
+        deviation = (x - x.mean()).abs() / std
+        # P(|Z| >= deviation / sqrt(C)); outlier when below the criterion
+        prob = scipy.special.erfc(deviation / np.sqrt(C))
+        return pd.Series(prob < criterion, index=dataset.index)
 
     @staticmethod
     def mark_outliers_lof(dataset, columns, n=20):
-        """Mark outliers using Local Outlier Factor (LOF)
-
-        Args:
-            dataset: DataFrame
-            columns: List of column names to use for detection
-            n: Number of neighbors (default: 20)
-
-        Returns:
-            tuple: (dataset with outlier column, outlier predictions, LOF scores)
-        """
+        """Return a boolean Series (True = outlier) using Local Outlier Factor."""
         from sklearn.neighbors import LocalOutlierFactor
 
-        dataset = dataset.copy()
-
+        if len(dataset) <= n:
+            return pd.Series(False, index=dataset.index)
         lof = LocalOutlierFactor(n_neighbors=n)
-        data = dataset[columns]
-        outliers = lof.fit_predict(data)
-        X_scores = lof.negative_outlier_factor_
-
-        # -1 for outliers, 1 for inliers
-        dataset["outlier_lof"] = outliers == -1
-
-        return dataset, outliers, X_scores
+        return pd.Series(lof.fit_predict(dataset[columns]) == -1, index=dataset.index)
 
     @staticmethod
-    def remove_outliers(dataset, columns, method="iqr", **kwargs):
-        """Remove outliers from multiple columns
+    def _clean_one_set(group, columns, method, C, n):
+        group = group.copy()
+        if method == "lof":
+            mask = OutlierRemover.mark_outliers_lof(group, columns, n=n)
+            group.loc[mask, columns] = np.nan
+            n_marked = int(mask.sum()) * len(columns)
+        else:
+            n_marked = 0
+            for col in columns:
+                if method == "iqr":
+                    mask = OutlierRemover.mark_outliers_iqr(group, col)
+                else:
+                    mask = OutlierRemover.mark_outliers_chauvenet(group, col, C)
+                n_marked += int(mask.sum())
+                group.loc[mask, col] = np.nan
+        group[columns] = group[columns].interpolate(method="linear", limit_direction="both")
+        return group[columns].to_numpy(), n_marked
+
+    @staticmethod
+    def clean_outliers(dataset, columns, method="chauvenet", scope="set", **kwargs):
+        """Mark outliers as NaN per set and linearly interpolate them within the set.
 
         Args:
-            dataset: DataFrame
-            columns: List of column names
-            method: Detection method ('iqr', 'chauvenet', or 'lof')
-            **kwargs: Additional parameters:
-                - C: for Chauvenet method (default 2)
-                - n: for LOF method (default 20)
-                - per_label: Whether to apply per label (default False)
+            dataset: DataFrame with a "set" column, in time order within each set
+            columns: sensor columns to clean
+            method: 'iqr', 'chauvenet' or 'lof'
+            scope: only "set" is supported
+            **kwargs: C (Chauvenet, default 2), n (LOF neighbours, default 20)
 
         Returns:
-            DataFrame with outliers removed
+            DataFrame with the same rows (and order) as the input
         """
-        dataset = dataset.copy()
-        initial_size = len(dataset)
-        per_label = kwargs.get("per_label", False)
-
-        if method == "iqr":
-            if per_label and "label" in dataset.columns:
-                # Apply IQR per label
-                outliers_removed_df = dataset.copy()
-                for col in columns:
-                    for label in dataset["label"].unique():
-                        # Mark outliers for this label
-                        label_data = OutlierRemover.mark_outliers_iqr(
-                            dataset[dataset["label"] == label], col
-                        )
-                        # Remove outliers
-                        outliers_removed_df = outliers_removed_df[
-                            ~(
-                                (outliers_removed_df["label"] == label)
-                                & outliers_removed_df.index.isin(
-                                    label_data[label_data[col + "_outlier"]].index
-                                )
-                            )
-                        ]
-                dataset = outliers_removed_df
-            else:
-                # Apply IQR globally
-                for col in columns:
-                    dataset = OutlierRemover.mark_outliers_iqr(dataset, col)
-                    dataset = dataset[~dataset[col + "_outlier"]]
-                    dataset = dataset.drop(columns=[col + "_outlier"])
-
-        elif method == "chauvenet":
-            C = kwargs.get("C", 2)
-            if per_label and "label" in dataset.columns:
-                # Apply Chauvenet per label (as in original file)
-                outliers_removed_df = dataset.copy()
-                for col in columns:
-                    for label in dataset["label"].unique():
-                        # Mark outliers for this label
-                        label_data = OutlierRemover.mark_outliers_chauvenet(
-                            dataset[dataset["label"] == label], col, C
-                        )
-
-                        # Count outliers
-                        n_outliers = label_data[col + "_outlier"].sum()
-
-                        # Replace with NaN instead of removing
-                        label_data.loc[label_data[col + "_outlier"], col] = np.nan
-
-                        # Update in main dataframe
-                        outliers_removed_df.loc[(outliers_removed_df["label"] == label), col] = (
-                            label_data[col]
-                        )
-
-                        logger.info(
-                            f"Marked {n_outliers} outliers as NaN from {col} for label {label}"
-                        )
-
-                dataset = outliers_removed_df
-            else:
-                # Apply Chauvenet globally
-                for col in columns:
-                    dataset = OutlierRemover.mark_outliers_chauvenet(dataset, col, C)
-                    dataset = dataset[~dataset[col + "_outlier"]]
-                    dataset = dataset.drop(columns=[col + "_outlier"])
-
-        elif method == "lof":
-            n_neighbors = kwargs.get("n", 20)
-            # LOF is multivariate, so apply to all columns at once
-            dataset, outliers, X_scores = OutlierRemover.mark_outliers_lof(
-                dataset, columns, n=n_neighbors
-            )
-            dataset = dataset[~dataset["outlier_lof"]]
-            dataset = dataset.drop(columns=["outlier_lof"])
-
-        else:
+        if method not in ("iqr", "chauvenet", "lof"):
             raise ValueError(f"Unknown method: {method}. Use 'iqr', 'chauvenet', or 'lof'")
+        if scope != "set":
+            raise ValueError(f"Unsupported scope {scope!r}: only 'set' is allowed (no labels)")
+        columns = list(columns)
+        C = kwargs.get("C", 2)
+        n = kwargs.get("n", 20)
 
-        removed_count = initial_size - len(dataset)
-        removal_pct = (removed_count / initial_size) * 100 if initial_size > 0 else 0
+        out = dataset.copy()
+        col_pos = [out.columns.get_loc(c) for c in columns]
+        set_ids = dataset["set"].to_numpy()
+        total_marked = 0
+        for s in pd.unique(set_ids):
+            pos = np.flatnonzero(set_ids == s)
+            values, marked = OutlierRemover._clean_one_set(dataset.iloc[pos], columns, method, C, n)
+            out.iloc[pos, col_pos] = values
+            total_marked += marked
 
+        n_cells = len(dataset) * len(columns)
         logger.info(
-            f"Removed {removed_count} outliers ({removal_pct:.2f}%) using {method} method. Dataset size: {len(dataset)}"
+            f"Marked and interpolated {total_marked} outlier values "
+            f"({100 * total_marked / max(n_cells, 1):.2f}% of cells) using {method} per {scope}. "
+            f"Rows kept: {len(out)}"
         )
-
-        return dataset
+        return out
