@@ -70,3 +70,6 @@ Consequences:
 - Phase 3 evaluates baseline and augmented models on real watch data.
 
 Rejected: magnitude-only features (fail a gate); tightening calibration to 2° (likely unachievable from human posture).
+
+**D-019 · 2026-10-22 · Record continuous sessions with segments; the phone writes labels to a separate file**
+The watch records the whole session continuously; sets, rest and other are time segments inside it. This captures rest and "other" motion as real sensor data (the training set has no negatives), lets set boundaries be corrected later without data loss, and means one transfer per session. The watch's raw files are immutable; the phone's `labels.json` holds labels and boundary overrides. Rejected: one file per set (loses rest/other data, can't fix boundary mistakes) and labels inside the watch's meta (mutates raw data).

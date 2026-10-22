@@ -6,10 +6,11 @@
 ## Now
 - **Current phase:** Phase 2: Wear OS + phone recorder (Phases 0 and 1 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Phase 2: orchestrator defines `:protocol` (Raw Format v1, `meta.json` schema, Data Layer messages) in a spec. In parallel, a small Sonnet task adds rotation augmentation (≤30°, K=8, D-018) as the default in the training pipeline.
+- **Next step:** Phase 2 tasks P1 (Gradle skeleton + `:protocol` + golden files + Python reader) ‖ A1 (rotation augmentation default), per `docs/specs/phase2-recorder.md` §9. Then P2 (`:wear`) ‖ P3 (`:mobile`), then P4 (Android CI).
 
 ## Pending owner tasks
-- [ ] Confirm Android package id (default `dev.proprio`)
+- [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
+- [ ] Install a Wear OS system image + AVD in Android Studio (SDK Manager → SDK Platforms → Wear OS 5 or 6 image), **or** enable Wi-Fi debugging on the Galaxy Watch (Settings → Developer options). Needed only for the Phase 2 smoke test.
 - [ ] U1: calibration recording at home, left wrist, ~20 min (after Phase 2)
 - [ ] U2: two gym sessions × 20 sets, left wrist, with video if possible (after Phase 2)
 - [ ] U3: two friends × 10 sets, plus their consent forms (after Phase 2)
@@ -41,10 +42,12 @@
 - [ ] [S] Wire rotation augmentation into the default training pipeline (MLflow-logged), re-baseline
 
 ### Phase 2: Wear OS + phone recorder
-- [ ] [O] `:protocol` (Raw Format v1, meta.json schema, Data Layer messages)
-- [ ] [S] `:wear` ‖ [S] `:mobile`
-- [ ] [S] JUnit writer/parser tests; Python Raw v1 reader with golden files
-- [ ] [U] Install and smoke test
+- [x] [O] Spec: `docs/specs/phase2-recorder.md` (continuous sessions + segments, Raw Format v1, schemas, golden files, Data Layer paths)
+- [ ] [S] P1 Gradle skeleton + `:protocol` + schemas + golden zips + Python reader `sensors/android.py`
+- [ ] [S] A1 ‖ Rotation augmentation as default training regime (D-018)
+- [ ] [S] P2 `:wear` ‖ [S] P3 `:mobile`
+- [ ] [S] P4 `android-ci.yml`
+- [ ] [U] Smoke test on watch or emulator; record measured rate/jitter
 
 ### Phase 3: calibration + domain shift
 - [ ] [U] U1, U2 (×2), U3
@@ -78,6 +81,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: Phase 2 spec written. Android SDK present (platforms 30–36.1, JBR 21, phone AVD); no Wear OS image or cmdline-tools yet. Owner AFK with watch off; device steps deferred.
 - 2026-10-22: Phase 1 complete. S2b and S2a merged; R2w/R2w8 follow-up run; D-018 recorded; Phase 1 review written.
 - 2026-10-22: S1 merged. Spec corrected (anti-alias attenuation: ≥14 dB at 6 Hz, ≥20 dB at 7 Hz). Resampled row count is 8180 (82 sets, 7360 windows after trimming).
 - 2026-10-22: Pushed `dev`; first GitHub CI run green. Owner approved merging `dev` → `main` (fast-forward to `f8b4e77`) and pushing. Phase 1 spec written (`docs/sensor_spec.md`).
