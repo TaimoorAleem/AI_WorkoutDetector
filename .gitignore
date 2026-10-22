@@ -97,3 +97,6 @@ target/
 # MLflow local tracking output
 mlruns/
 mlartifacts/
+
+# Claude Code local state (agent worktrees, local settings)
+/.claude/
