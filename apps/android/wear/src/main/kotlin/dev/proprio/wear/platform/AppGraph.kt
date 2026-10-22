@@ -16,6 +16,7 @@ import dev.proprio.wear.sensor.SensorRecorder
 import dev.proprio.wear.session.CommandHandler
 import dev.proprio.wear.session.ForegroundHost
 import dev.proprio.wear.session.Haptics
+import dev.proprio.wear.session.StrategyHolder
 import dev.proprio.wear.session.RecordingController
 import dev.proprio.wear.transfer.TransferManager
 import dev.proprio.wear.transfer.WearTransport
@@ -43,6 +44,7 @@ class AppGraph(context: Context) {
         nodes = transport,
         log = ::appLog,
     )
+    val strategy = StrategyHolder()
     val controller = RecordingController(
         recorder = SensorRecorder(
             AndroidSensorSource(appContext.getSystemService(SensorManager::class.java), ::appLog),
@@ -57,6 +59,8 @@ class AppGraph(context: Context) {
         app = appInfo(appContext),
         device = deviceInfo(),
         scope = scope,
+        exercise = HealthServicesExercise(appContext, ::appLog),
+        strategy = { strategy.current },
         log = ::appLog,
     )
     val commands = CommandHandler(controller, ::appLog)

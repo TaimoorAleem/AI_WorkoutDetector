@@ -1,6 +1,9 @@
 package dev.proprio.wear.platform
 
 import android.app.Notification
+import androidx.core.app.NotificationCompat
+import androidx.wear.ongoing.OngoingActivity
+import androidx.wear.ongoing.Status
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -42,7 +45,9 @@ class RecordingService : Service() {
     override fun onCreate() {
         super.onCreate()
         ensureChannel(this)
-        val notification = buildNotification(this, "Starting...")
+        val graph = (application as ProprioApp).graph
+        val ongoing = graph.strategy.current.ongoing
+        val notification = buildNotification(this, "Starting...", ongoing)
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
         } else {
@@ -55,7 +60,7 @@ class RecordingService : Service() {
         }
         val s = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope = s
-        val controller = (application as ProprioApp).graph.controller
+        val controller = graph.controller
         observer = s.launch {
             controller.state
                 .map { st ->
@@ -70,7 +75,7 @@ class RecordingService : Service() {
                 .distinctUntilChanged()
                 .collect { text ->
                     getSystemService(NotificationManager::class.java)
-                        .notify(NOTIFICATION_ID, buildNotification(this@RecordingService, text))
+                        .notify(NOTIFICATION_ID, buildNotification(this@RecordingService, text, ongoing))
                 }
         }
     }
@@ -96,19 +101,35 @@ class RecordingService : Service() {
             )
         }
 
-        fun buildNotification(context: Context, text: String): Notification {
+        /**
+         * The recording notification. With [ongoingActivity] the Wear OS Ongoing Activity API is attached
+         * (category workout, touch intent = open the app, status = [text]); see the README for why.
+         */
+        fun buildNotification(context: Context, text: String, ongoingActivity: Boolean = false): Notification {
             val open = PendingIntent.getActivity(
-                context, 0, Intent(context, MainActivity::class.java),
+                context, 0,
+                Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            return Notification.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_menu_recent_history)
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(ICON)
                 .setContentTitle(context.getString(R.string.app_name))
                 .setContentText(text)
                 .setOngoing(true)
-                .setCategory(Notification.CATEGORY_WORKOUT)
+                .setCategory(NotificationCompat.CATEGORY_WORKOUT)
                 .setContentIntent(open)
-                .build()
+            if (ongoingActivity) {
+                OngoingActivity.Builder(context.applicationContext, NOTIFICATION_ID, builder)
+                    .setStaticIcon(ICON)
+                    .setCategory(NotificationCompat.CATEGORY_WORKOUT)
+                    .setTouchIntent(open)
+                    .setStatus(Status.Builder().addTemplate("#text#").addPart("text", Status.TextPart(text)).build())
+                    .build()
+                    .apply(context.applicationContext)
+            }
+            return builder.build()
         }
+
+        private const val ICON = android.R.drawable.ic_menu_recent_history
     }
 }

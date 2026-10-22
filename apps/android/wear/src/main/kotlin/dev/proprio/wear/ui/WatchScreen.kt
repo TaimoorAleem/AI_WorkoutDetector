@@ -1,6 +1,11 @@
 package dev.proprio.wear.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -15,6 +20,21 @@ import androidx.wear.compose.material3.Text
 import dev.proprio.protocol.MarkKind
 import dev.proprio.protocol.SessionKind
 import dev.proprio.wear.session.UiState
+
+/** Ambient (low-power) face: black background, dim text, only what is needed to see that a session records. */
+@Composable
+private fun AmbientScreen(state: UiState) {
+    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                if (state.recording) formatElapsed(state.elapsedS) else "Proprio",
+                color = Color.LightGray,
+                style = MaterialTheme.typography.titleLarge,
+            )
+            if (state.recording) Text("recording", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
 
 fun formatElapsed(s: Double): String {
     val t = s.toInt()
@@ -31,7 +51,12 @@ fun WatchScreen(
     onStopSegment: () -> Unit,
     onStartCalibration: () -> Unit,
     onRetryTransfers: () -> Unit,
+    ambient: Boolean = false,
 ) {
+    if (ambient) {
+        AmbientScreen(state)
+        return
+    }
     ScalingLazyColumn(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
