@@ -10,6 +10,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from workout_ml.sensors import load_profile, read_metamotion, to_csf
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,14 +19,16 @@ SENSOR_FILE_RE = re.compile(r"^(?P<stem>.+?)_(?P<sensor>Accelerometer|Gyroscope)
 
 
 class DataLoader:
-    """Load and merge accelerometer and gyroscope data from CSV files"""
+    """Discover MetaMotion CSV pairs and convert each set to CSF-1."""
 
-    def __init__(self, data_path):
+    def __init__(self, data_path, profile="metamotion-r-2019"):
         """
         Args:
             data_path: Path to directory containing CSV files
+            profile: device profile id/path (or a loaded Profile) used by ``to_csf``
         """
         self.data_path = Path(data_path)
+        self.profile = load_profile(profile) if isinstance(profile, (str, Path)) else profile
         #: Stems that lacked one of the two sensors (filled by load_data)
         self.unpaired_stems = []
         #: Duplicate re-export files that were ignored (filled by load_data)
@@ -56,16 +60,25 @@ class DataLoader:
             slot[m.group("sensor")] = f
         return dict(sorted(pairs.items()))
 
-    def load_data(self):
-        """
-        Load and process all CSV files.
+    @staticmethod
+    def parse_filename_meta(filename):
+        """participant / label / category from a MetaMotion file name."""
+        parts = Path(filename).name.split("-")
+        return {
+            "participant": parts[0],
+            "label": parts[1],
+            "category": re.sub(r"\d+$", "", parts[2].split("_")[0]),
+        }
+
+    def load_sets(self):
+        """Read every paired acc/gyro file into a ``SensorSet`` (raw units, no resampling).
 
         Set IDs are derived from the sorted, unique file stem (1-based), so they do
         not depend on glob order. Stems missing one of the two sensors are logged as
         WARNING and dropped (see ``self.unpaired_stems``).
 
         Returns:
-            tuple: (accelerometer_df, gyroscope_df)
+            list[SensorSet]: ``meta`` holds participant, label, category, set, stem
         """
         self.duplicate_files = []
         pairs = self._pair_files()
@@ -78,115 +91,39 @@ class DataLoader:
             f"Found {len(paired)} paired sets ({len(self.unpaired_stems)} unpaired dropped)"
         )
 
-        acc_frames, gyr_frames = [], []
+        sets = []
         for set_id, stem in enumerate(paired, start=1):
-            acc = self._load_single_file(pairs[stem]["Accelerometer"])
-            gyr = self._load_single_file(pairs[stem]["Gyroscope"])
-            acc["set"] = set_id
-            gyr["set"] = set_id
-            acc_frames.append(acc)
-            gyr_frames.append(gyr)
+            acc_path, gyr_path = pairs[stem]["Accelerometer"], pairs[stem]["Gyroscope"]
+            meta = self.parse_filename_meta(acc_path.name)
+            meta.update({"set": set_id, "stem": stem})
+            sets.append(read_metamotion(acc_path, gyr_path, meta))
+        return sets
 
-        acc_df = self._process_timestamps(pd.concat(acc_frames, ignore_index=True))
-        gyr_df = self._process_timestamps(pd.concat(gyr_frames, ignore_index=True))
+    def load_data(self):
+        """Load all sets and convert each to CSF-1 with the loader's device profile.
 
-        logger.info(
-            f"Loaded {len(acc_df)} accelerometer records and {len(gyr_df)} gyroscope records"
-        )
-
-        return acc_df, gyr_df
-
-    def _load_single_file(self, filepath):
-        """Load a single CSV file and extract metadata"""
-        filename = Path(filepath).name
-
-        # Extract metadata from filename
-        parts = filename.split("-")
-        participant = parts[0]
-        label = parts[1]
-        category = re.sub(r"\d+$", "", parts[2].split("_")[0])
-
-        df = pd.read_csv(filepath)
-        df["participant"] = participant
-        df["label"] = label
-        df["category"] = category
-
-        return df
-
-    def _process_timestamps(self, df):
-        """Convert epoch to datetime index"""
-        if "epoch (ms)" in df.columns:
-            df.index = pd.to_datetime(df["epoch (ms)"], unit="ms")
-            df = df.drop(columns=["epoch (ms)"])
-
-        # Remove unnecessary columns
-        df = df.drop(columns=[col for col in ["time (01:00)", "elapsed (s)"] if col in df.columns])
-
-        return df
-
-    def merge_sensors(self, acc_df, gyr_df):
-        """Merge accelerometer and gyroscope data, set by set"""
-        names = [
-            "acc_x",
-            "acc_y",
-            "acc_z",
-            "gyr_x",
-            "gyr_y",
-            "gyr_z",
-            "participant",
-            "label",
-            "category",
-            "set",
-        ]
-        acc_by_set = {k: g for k, g in acc_df.groupby("set")}
-        merged = []
-        for set_id, gyr in gyr_df.groupby("set"):
-            m = pd.concat([acc_by_set[set_id].iloc[:, :3], gyr], axis=1, sort=True)
-            m.columns = names
-            merged.append(m)
-        return pd.concat(merged).sort_index(kind="stable")
-
-    def resample_data(self, df, sampling_rule="200ms"):
-        """
-        Resample data to specified frequency
-
-        Args:
-            df: DataFrame with datetime index
-            sampling_rule: Resampling frequency (e.g., '200ms')
+        Pipeline per set: ``read_metamotion`` -> ``to_csf``; then the participant /
+        label / category / set columns are added and the sets are concatenated in time
+        order (the legacy row order).
 
         Returns:
-            Resampled DataFrame
+            DataFrame indexed by 200 ms bin (naive UTC) with acc_*, gyr_*, participant,
+            label, category and set columns. ``df.attrs["csf"]`` carries the CSF metadata.
         """
-        # Define aggregation rules for different column types
-        sampling_dict = {
-            "acc_x": "mean",
-            "acc_y": "mean",
-            "acc_z": "mean",
-            "gyr_x": "mean",
-            "gyr_y": "mean",
-            "gyr_z": "mean",
-            "participant": "last",
-            "label": "last",
-            "category": "last",
-            "set": "last",
-        }
-
-        # Filter to only include columns that exist in the dataframe
-        sampling_dict = {k: v for k, v in sampling_dict.items() if k in df.columns}
-
-        # Split by day and resample each group to avoid edge effects
-        days = [g for n, g in df.groupby(pd.Grouper(freq="D"))]
-        data_resampled = pd.concat(
-            [day.resample(sampling_rule).apply(sampling_dict).dropna() for day in days]
-        )
-
-        # Convert set column to integer
-        if "set" in data_resampled.columns:
-            data_resampled["set"] = data_resampled["set"].astype("int")
-
-        logger.info(f"Resampled data to {sampling_rule}. New size: {len(data_resampled)}")
-
-        return data_resampled
+        sets = self.load_sets()
+        if not sets:
+            raise ValueError(f"No paired MetaMotion sets found in {self.data_path}")
+        frames = []
+        for s in sets:
+            df = to_csf(s, self.profile)
+            for col in ("participant", "label", "category", "set"):
+                df[col] = s.meta[col]
+            frames.append(df)
+        out = pd.concat(frames).sort_index(kind="stable")
+        out.index.name = "epoch (ms)"
+        out.attrs["csf"] = dict(frames[0].attrs["csf"])
+        logger.info(f"Converted {len(sets)} sets to CSF-1. Size: {len(out)}")
+        return out
 
 
 class OutlierRemover:
