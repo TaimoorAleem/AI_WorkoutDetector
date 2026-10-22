@@ -45,6 +45,7 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
 - `ml/`: the installable `workout_ml` package (`ml/pyproject.toml`, locks in `ml/requirements.lock` and `ml/requirements-dev.lock`).
   - `workout_ml/config.py`: paths and pipeline config (`ensure_dirs()` creates output dirs).
   - `workout_ml/sensors/`: CSF-1 layer (`types.py` RawStream/SensorSet, `transforms.py`, `resample.py`, `profiles.py` + `profiles/*.yaml`, `metamotion.py` reader, `convert.py` `to_csf`). Public API: `to_csf`, `from_canonical`, `load_profile`, `read_metamotion`. Spec: `docs/sensor_spec.md`.
+  - `workout_ml/sensors/android.py`: Raw Format v1 reader (`read_session`, `Session.segments`, `recording_stats`; CLI `python -m workout_ml.sensors.android <zip>`). Validates against `protocol/schema/*.json` (`ml/setup.py` copies them into the wheel).
   - `workout_ml/data/preprocessor.py`: `DataLoader` (file discovery, set IDs from file stems, duplicates; `load_sets()` -> SensorSets, `load_data()` -> reader -> `to_csf` per set -> one DataFrame), `OutlierRemover.clean_outliers` (per-set mark NaN + interpolate).
   - `workout_ml/features/`: `FeatureEngineer` (per-set, no `duration`, no PCA), filters, temporal and FFT features.
   - `workout_ml/models/lopo.py`: in-fold `PCAFeatures`, feature sets, model pipelines, LOPO evaluation and set-level majority vote. `models/experiment.py`: runs every feature set x model and tracks it in MLflow.
@@ -52,6 +53,8 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
   - `workout_ml/pipeline.py`: end-to-end pipeline (`main()`); flags `--tune`, `--forward-selection`, `--models`. MLflow store defaults to `sqlite:///<repo>/mlflow.db` (override with `MLFLOW_TRACKING_URI`); view with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
   - `workout_ml/reps/`: rep counting (`counter.py`: `count_set`, `count_peaks`; `evaluate.py`: per-set evaluation and summary).
   - `tests/`: pytest suite.
+- `apps/android/`: Gradle project (`:protocol` pure Kotlin/JVM, `:wear`, `:mobile`; version catalog `gradle/libs.versions.toml`). Needs `JAVA_HOME` = Android Studio's JBR 21 and `apps/android/local.properties` (`sdk.dir`, gitignored). Run from `apps/android`: `./gradlew :protocol:test :wear:assembleDebug :mobile:assembleDebug`; regenerate goldens with `./gradlew :protocol:generateGolden` (never part of `test`).
+- `protocol/`: `schema/` (JSON Schemas for `meta.json`/`labels.json`) and `golden/` (committed cross-language conformance sessions + `expected.json`).
 - Raw data lives in `data/raw/MetaMotion/`, tracked by DVC (`data/raw/MetaMotion.dvc`, local remote `E:/dvc-store/proprio`). Run `dvc pull` to fetch.
 - Environment: conda env `proprio` (Python 3.11). Setup: `conda activate proprio`, `pip install -r ml/requirements-dev.lock`, `pip install -e ml --no-deps`.
 - Commands: `python -m workout_ml.pipeline`, `python -m workout_ml.reps.evaluate`, `pytest ml/tests`, `ruff check ml`.
