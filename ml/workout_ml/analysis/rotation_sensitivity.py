@@ -500,6 +500,7 @@ def main(argv=None):
     warnings.filterwarnings("ignore")
     start = time.perf_counter()
     config.ensure_dirs()
+    sha, dirty = tracking.git_info()  # before any output file is written
 
     cached = pd.DataFrame()
     if not args.fresh and FOLDS_CSV_PATH.exists():
@@ -533,7 +534,6 @@ def main(argv=None):
         for m, v in combos
     }
     make_plot(tables, PLOT_PATH)
-    sha, dirty = tracking.git_info()
     todo_names = ", ".join(f"{m}/{v}" for m, v in todo) or "none"
     meta = (
         f"Code {sha[:8]} (dirty={dirty}), data md5 {tracking.data_md5()}, "
