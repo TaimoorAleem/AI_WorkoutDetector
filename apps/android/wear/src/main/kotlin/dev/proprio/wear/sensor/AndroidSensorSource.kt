@@ -9,17 +9,32 @@ import android.os.HandlerThread
 import dev.proprio.protocol.SensorInfo
 
 /** Real [SensorSource]: events are delivered on a dedicated [HandlerThread], never the main thread. */
-class AndroidSensorSource(private val sensorManager: SensorManager) : SensorSource {
+class AndroidSensorSource(
+    private val sensorManager: SensorManager,
+    private val log: (String) -> Unit = {},
+) : SensorSource {
     private var thread: HandlerThread? = null
     private var listener: SensorEventListener? = null
 
-    override fun describe(type: Int): SensorInfo? =
-        sensorManager.getDefaultSensor(type)?.let { toInfo(it) }
+    /** Explicit, deterministic choice (see [SensorSelector]); logged with the reason. */
+    private fun choose(type: Int): Selection<Sensor>? {
+        val sel = SensorSelector.select(
+            sensorManager.getSensorList(type), sensorManager.getDefaultSensor(type),
+        ) { SensorCandidate((it.name as String?).orEmpty(), (it.vendor as String?).orEmpty(), it.isWakeUpSensor) }
+        sel?.let { log("sensor type $type -> '${it.sensor.name}' (${it.sensor.vendor}), selection=${it.reason.name.lowercase()}") }
+        return sel
+    }
+
+    override fun describe(type: Int): SensorInfo? = choose(type)?.let { sel ->
+        val info = toInfo(sel.sensor)
+        // Meta has no selection field; the sensor name identifies the choice, a fallback is flagged in it.
+        if (sel.reason == SelectionReason.DEFAULT_FALLBACK) info.copy(name = info.name + " [default_fallback]") else info
+    }
 
     override fun start(periodUs: Int, maxReportLatencyUs: Int, sink: SensorSink): Boolean {
         stop()
-        val acc = sensorManager.getDefaultSensor(TYPE_ACC) ?: return false
-        val gyr = sensorManager.getDefaultSensor(TYPE_GYR) ?: return false
+        val acc = choose(TYPE_ACC)?.sensor ?: return false
+        val gyr = choose(TYPE_GYR)?.sensor ?: return false
         val t = HandlerThread("proprio-sensors", android.os.Process.THREAD_PRIORITY_URGENT_AUDIO).also { it.start() }
         val l = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {

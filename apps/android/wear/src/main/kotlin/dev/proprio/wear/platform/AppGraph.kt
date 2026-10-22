@@ -45,7 +45,7 @@ class AppGraph(context: Context) {
     )
     val controller = RecordingController(
         recorder = SensorRecorder(
-            AndroidSensorSource(appContext.getSystemService(SensorManager::class.java)),
+            AndroidSensorSource(appContext.getSystemService(SensorManager::class.java), ::appLog),
             SystemDeviceClock,
             log = ::appLog,
         ),

@@ -5,7 +5,6 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.wear.compose.material3.MaterialTheme
 import dev.proprio.wear.ui.WatchScreen
@@ -16,14 +15,14 @@ import dev.proprio.protocol.SessionKind
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private val notificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* the FGS runs either way */ }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // The ongoing recording notification needs POST_NOTIFICATIONS on API 33+. The health FGS type
         // itself needs no runtime permission here (HIGH_SAMPLING_RATE_SENSORS is declared in the manifest).
-        if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (Build.VERSION.SDK_INT >= 33) {
+            // The FGS runs either way; the notification is merely hidden if denied.
+            androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
 
         val graph = (application as ProprioApp).graph
         val c = graph.controller
