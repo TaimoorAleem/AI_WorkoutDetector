@@ -76,8 +76,6 @@ target/
 # Jupyter NB Checkpoints
 .ipynb_checkpoints/
 
-# exclude data from source control by default
-/data/raw/MetaMotion
 
 # Mac OS-specific storage files
 .DS_Store
@@ -95,3 +93,7 @@ target/
 /data/processed/*
 !/data/processed/.gitkeep
 /results/
+
+# MLflow local tracking output
+mlruns/
+mlartifacts/
