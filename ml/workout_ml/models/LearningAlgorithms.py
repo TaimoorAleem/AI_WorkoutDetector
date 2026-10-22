@@ -122,7 +122,7 @@ class ClassificationAlgorithms:
         # Fit the model
         nn.fit(
             train_X,
-            train_y.values.ravel(),
+            train_y.to_numpy().ravel(),
         )
 
         if gridsearch and print_model_details:
@@ -166,7 +166,7 @@ class ClassificationAlgorithms:
             svm = SVC(C=C, kernel=kernel, gamma=gamma, probability=True, cache_size=7000)
 
         # Fit the model
-        svm.fit(train_X, train_y.values.ravel())
+        svm.fit(train_X, train_y.to_numpy().ravel())
 
         if gridsearch and print_model_details:
             print(svm.best_params_)
@@ -207,7 +207,7 @@ class ClassificationAlgorithms:
             svm = LinearSVC(C=C, tol=tol, max_iter=max_iter)
 
         # Fit the model
-        svm.fit(train_X, train_y.values.ravel())
+        svm.fit(train_X, train_y.to_numpy().ravel())
 
         if gridsearch and print_model_details:
             print(svm.best_params_)
@@ -251,7 +251,7 @@ class ClassificationAlgorithms:
             knn = KNeighborsClassifier(n_neighbors=n_neighbors)
 
         # Fit the model
-        knn.fit(train_X, train_y.values.ravel())
+        knn.fit(train_X, train_y.to_numpy().ravel())
 
         if gridsearch and print_model_details:
             print(knn.best_params_)
@@ -302,7 +302,7 @@ class ClassificationAlgorithms:
 
         # Fit the model
 
-        dtree.fit(train_X, train_y.values.ravel())
+        dtree.fit(train_X, train_y.to_numpy().ravel())
 
         if gridsearch and print_model_details:
             print(dtree.best_params_)
@@ -401,7 +401,7 @@ class ClassificationAlgorithms:
 
         # Fit the model
 
-        rf.fit(train_X, train_y.values.ravel())
+        rf.fit(train_X, train_y.to_numpy().ravel())
 
         if gridsearch and print_model_details:
             print(rf.best_params_)
