@@ -32,7 +32,7 @@ def test_mlflow_end_to_end_on_tiny_dataset(tmp_path, monkeypatch):
     report = tmp_path / "report.md"
     outcome = run_experiment(
         tiny_featured_df(),
-        models=["DT", "NB"],
+        models=["DT", "NN"],
         artifact_root=tmp_path / "mlartifacts",
         report_path=report,
         rep_summary=None,
@@ -55,9 +55,7 @@ def test_mlflow_end_to_end_on_tiny_dataset(tmp_path, monkeypatch):
     artifacts = {a.path for a in client.list_artifacts(outcome.best_run_id)}
     assert {"fold_metrics.csv", "confusion_matrix.png"} <= artifacts
     # MLflow 3 stores log_model output as a LoggedModel linked to the run
-    logged = mlflow.search_logged_models(
-        experiment_ids=[exp.experiment_id], output_format="list"
-    )
+    logged = mlflow.search_logged_models(experiment_ids=[exp.experiment_id], output_format="list")
     mine = [m for m in logged if m.source_run_id == outcome.best_run_id]
     assert len(mine) == 1
     model = mlflow.pyfunc.load_model(f"models:/{mine[0].model_id}")

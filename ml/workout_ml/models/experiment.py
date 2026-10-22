@@ -249,7 +249,12 @@ def run_experiment(
             mlflow.set_tag("best_model", "true")
             signature = infer_signature(X_fs.head(50), final.predict(X_fs.head(50)))
             mlflow.sklearn.log_model(
-                final, name="model", signature=signature, input_example=X_fs.head(3)
+                final,
+                name="model",
+                signature=signature,
+                input_example=X_fs.head(3),
+                # skops would reject our custom PCAFeatures / MLP internals as untrusted
+                serialization_format="cloudpickle",
             )
 
         pooled = confusion_matrix(
