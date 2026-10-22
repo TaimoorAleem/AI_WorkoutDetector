@@ -130,7 +130,7 @@ calibration: {date: null, session: null, residual_g: null, gyro_profile_r: null}
   - Acc/gyro consistency: rotating a synthetic rigid-body rotation keeps the gyro integral consistent with the change in the gravity direction.
 - **Emulation:**
   - A 0.5 Hz sine at 50 Hz with 3 ms jitter, after emulation to 12.5 Hz, keeps its frequency within 2% (FFT peak) and its amplitude within 5%.
-  - A 6 Hz component is attenuated by at least 20 dB, which shows the anti-alias filter works.
+  - The anti-alias filter attenuates a 6 Hz component by ≥ 14 dB and a 7 Hz component by ≥ 20 dB. *(Corrected during S1: an order-4 Butterworth run through `filtfilt` with a 5 Hz cutoff reaches only about −14.5 dB at 6 Hz, so the original "≥ 20 dB at 6 Hz" was unachievable.)*
 - **Gaps:** a stream with a 1 s hole yields two segments, and no CSF bins fall inside the hole.
 - **Binning:** bins are epoch-aligned to 200 ms; a bin with only one sensor is dropped; values are arithmetic means.
 - **Profiles:** both YAMLs load, `transform_id` is stable, and changing a number changes `transform_id`.

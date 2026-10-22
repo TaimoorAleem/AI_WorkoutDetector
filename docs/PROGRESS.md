@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 1: CSF-1 normalization layer (Phase 0 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Phase 1 tasks S1 (`sensors/` package + pipeline rewire) ‖ S2a (rotation sensitivity), per `docs/sensor_spec.md` §8. Then S2b (fake-watch round trip), then orchestrator §7.3 decision.
+- **Next step:** S2a (rotation sensitivity) still running; S2b (fake-watch generator + round trip) starting. Then orchestrator §7.3 decision.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`)
@@ -34,7 +34,7 @@
 
 ### Phase 1: CSF-1 normalization layer
 - [x] [O] `docs/sensor_spec.md`: CSF-1, conversion steps, profiles, fake-watch generator, tests, analyses, decision rule
-- [ ] [S] S1 `sensors/` package + tests; rewire pipeline onto `to_csf`; regression (metrics unchanged)
+- [x] [S] S1 `sensors/` package (`to_csf`, `from_canonical`, `load_profile`, `read_metamotion`), 2 device profiles, 106 tests; pipeline rewired; real-data output bit-identical to legacy loader, leaderboard unchanged
 - [ ] [S] S2a ‖ Rotation sensitivity (§7.2) with reference curves R1 (magnitude-only) and R2 (rotation augmentation)
 - [ ] [S] S2b Fake-watch generator + round-trip test + model-level round trip (§7.1), after S1
 - [ ] [O] §7.3 decision: θ_tol, residual gate, robust features or augmentation
@@ -77,6 +77,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: S1 merged. Spec corrected (anti-alias attenuation: ≥14 dB at 6 Hz, ≥20 dB at 7 Hz). Resampled row count is 8180 (82 sets, 7360 windows after trimming).
 - 2026-10-22: Pushed `dev`; first GitHub CI run green. Owner approved merging `dev` → `main` (fast-forward to `f8b4e77`) and pushing. Phase 1 spec written (`docs/sensor_spec.md`).
 - 2026-10-22: Phase 0 complete. 0.4b merged; clean rerun on `dev` reproduced metrics exactly (MLflow parent `f5231a5df0974e1e94a80b04f2cfe6b6`). Orchestrator review written; D-016 (duplicate raw files); PROJECT.md §6.1 corrected; Phase 1 gains a rotation-sensitivity test.
 - 2026-10-22: 0.2 (rep counter library) and 0.3 (CI + cross-platform locks) merged into `dev`; 0.4 spec written.
