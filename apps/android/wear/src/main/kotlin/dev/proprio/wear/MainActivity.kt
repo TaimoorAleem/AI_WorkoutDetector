@@ -28,10 +28,6 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private var ambient by mutableStateOf(false)
 
-    private companion object {
-        const val MIN_BRIGHTNESS = 0.01f
-    }
-
     private val ambientCallback = object : AmbientLifecycleObserver.AmbientLifecycleCallback {
         override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
             ambient = true
@@ -45,10 +41,8 @@ class MainActivity : ComponentActivity() {
     private fun applyScreenOn(on: Boolean) {
         val flag = android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         if (on) window.addFlags(flag) else window.clearFlags(flag)
-        window.attributes = window.attributes.apply {
-            screenBrightness = if (on) MIN_BRIGHTNESS else android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-        }
-        appLog("screen_on ${if (on) "held (min brightness)" else "released"}")
+        // No brightness override for now: at 0.01 the screen was barely readable (battery tuning is pre-launch work)
+        appLog("screen_on ${if (on) "held" else "released"}")
     }
 
     /** Start request from the phone's remote launch; consumed once, run when the activity is visible. */

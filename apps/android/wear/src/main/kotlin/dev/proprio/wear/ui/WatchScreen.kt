@@ -39,10 +39,10 @@ private fun AmbientScreen(state: UiState) {
     }
 }
 
-/** Screen colors. While recording the screen stays on at minimum brightness: pure black (AMOLED pixels off) and dim text. */
+/** Screen colors. While recording the screen stays on (D-024): pure black background (AMOLED pixels off), readable text. */
 data class WatchPalette(val background: Color, val content: Color, val button: Color)
 
-val RECORDING_PALETTE = WatchPalette(Color(0xFF000000), Color(0xFF5A5A5A), Color(0xFF151515))
+val RECORDING_PALETTE = WatchPalette(Color(0xFF000000), Color(0xFFE0E0E0), Color(0xFF303030))
 val IDLE_PALETTE = WatchPalette(Color(0xFF000000), Color(0xFFE0E0E0), Color(0xFF303030))
 
 fun watchPalette(state: UiState): WatchPalette = if (state.recording) RECORDING_PALETTE else IDLE_PALETTE
