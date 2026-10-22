@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
         val wanted = buildList {
             if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
             add(Manifest.permission.ACTIVITY_RECOGNITION)
+            add(Manifest.permission.BODY_SENSORS)
         }.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
         if (wanted.isNotEmpty()) {
             androidx.core.app.ActivityCompat.requestPermissions(this, wanted.toTypedArray(), 1)
