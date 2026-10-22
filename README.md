@@ -28,3 +28,7 @@ Locks are cross-platform; regenerate with `uv pip compile ml/pyproject.toml --un
 Book: [Hoogendoorn, M. and Funk, B., Machine Learning for the Quantified Self - On the Art of Learning from Sensory Data, Springer, 2018.](https://link.springer.com/book/10.1007/978-3-319-66308-1)
 
 Code snippets retrieved from: https://github.com/mhoogen/ML4QS
+
+## Android
+
+From `apps/android` (JDK 21, Android SDK with platform 36): `./gradlew :protocol:test :wear:testDebugUnitTest :mobile:testDebugUnitTest :wear:assembleDebug :mobile:assembleDebug :wear:lintDebug :mobile:lintDebug`. CI (`.github/workflows/android-ci.yml`) runs the same on push/PR to `dev` and `main`.
