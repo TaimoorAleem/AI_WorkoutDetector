@@ -5,12 +5,14 @@ on:
     branches: [dev, main]
     paths:
       - "ml/**"
+      - "protocol/**"
       - ".github/workflows/ml-ci.yml"
       - "data/raw/*.dvc"
   pull_request:
     branches: [dev, main]
     paths:
       - "ml/**"
+      - "protocol/**"
       - ".github/workflows/ml-ci.yml"
       - "data/raw/*.dvc"
 
