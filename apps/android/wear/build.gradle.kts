@@ -8,7 +8,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.proprio.wear"
+        applicationId = "dev.proprio"
         minSdk = 30
         targetSdk = 36
         versionCode = 1

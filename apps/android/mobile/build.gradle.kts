@@ -12,7 +12,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.proprio.mobile"
+        applicationId = "dev.proprio"
         minSdk = 29
         targetSdk = 36
         versionCode = 1
