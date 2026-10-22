@@ -3,6 +3,7 @@
 from workout_ml.sensors.convert import CSF_COLUMNS, CSF_VERSION, to_csf
 from workout_ml.sensors.metamotion import read_metamotion
 from workout_ml.sensors.profiles import Profile, load_profile
+from workout_ml.sensors.simulate import profile_with_rotation, random_rotation, simulate_android
 from workout_ml.sensors.transforms import from_canonical
 from workout_ml.sensors.types import RawStream, SensorSet
 
@@ -14,6 +15,9 @@ __all__ = [
     "SensorSet",
     "from_canonical",
     "load_profile",
+    "profile_with_rotation",
+    "random_rotation",
     "read_metamotion",
+    "simulate_android",
     "to_csf",
 ]
