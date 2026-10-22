@@ -391,6 +391,7 @@ pywin32==312 ; sys_platform == 'win32'
     #   dvc-task
 pyyaml==6.0.3
     # via
+    #   workout-ml (ml/pyproject.toml)
     #   mlflow-skinny
     #   omegaconf
 requests==2.34.2

@@ -52,12 +52,10 @@ def main(argv=None):
     start = time.perf_counter()
     config.ensure_dirs()
 
-    # Step 1: load, merge, resample, per-set outlier handling
+    # Step 1: load (reader -> CSF-1 per set), per-set outlier handling
     logger.info("STEP 1: Loading and preprocessing data")
     loader = DataLoader(config.RAW_DATA_PATH)
-    acc_df, gyr_df = loader.load_data()
-    merged_df = loader.merge_sensors(acc_df, gyr_df)
-    resampled_df = loader.resample_data(merged_df, sampling_rule="200ms")
+    resampled_df = loader.load_data()  # metamotion reader -> to_csf, per set
 
     oc = config.OUTLIER_CONFIG
     sensor_columns = config.FEATURE_CONFIG["predictor_columns"]

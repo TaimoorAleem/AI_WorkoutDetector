@@ -1,0 +1,12 @@
+profile_id: galaxy-watch-prior-v0
+csf_version: 1
+device: {vendor: Samsung, model: null, platform: android}   # model filled in Phase 3
+acc: {source_unit: "m/s^2", unit_scale: 0.10197162129779283}
+gyr: {source_unit: "rad/s", unit_scale: 57.29577951308232}
+# PRIOR, unverified: left wrist, buttons toward the hand gives watch +x distal, so it maps to MetaMotion +y.
+# MetaMotion x/z are unknown; this is one det=+1 completion. Phase 3 replaces it with a Kabsch fit.
+rotation: [[0,1,0],[1,0,0],[0,0,-1]]
+rotation_status: prior
+emulation: {enabled: true, acc_hz: 12.5, gyr_hz: 25.0, anti_alias_order: 4, anti_alias_fraction: 0.8, max_gap_ms: 500}
+clip: {acc_g: null}
+calibration: {date: null, session: null, residual_g: null, gyro_profile_r: null}

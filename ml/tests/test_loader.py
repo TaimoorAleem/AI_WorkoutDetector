@@ -47,8 +47,8 @@ def _make(tmp_path, order, *, only_acc=(), duplicates=()):
     return stems
 
 
-def _set_by_stem_label(acc):
-    return acc.groupby("label")["set"].first().to_dict()
+def _set_by_stem_label(df):
+    return df.groupby("label")["set"].first().to_dict()
 
 
 def test_set_ids_are_deterministic_and_independent_of_file_order(tmp_path):
@@ -58,12 +58,22 @@ def test_set_ids_are_deterministic_and_independent_of_file_order(tmp_path):
     d2.mkdir()
     _make(d1, names)
     _make(d2, list(reversed(names)))
-    acc1, gyr1 = DataLoader(d1).load_data()
-    acc2, gyr2 = DataLoader(d2).load_data()
-    # ids are 1..n over the sorted stems, and acc/gyro agree for each set
-    assert _set_by_stem_label(acc1) == {"bench": 1, "squat": 2, "row": 3}
-    assert _set_by_stem_label(acc1) == _set_by_stem_label(gyr1)
-    assert _set_by_stem_label(acc1) == _set_by_stem_label(acc2) == _set_by_stem_label(gyr2)
+    df1 = DataLoader(d1).load_data()
+    df2 = DataLoader(d2).load_data()
+    # ids are 1..n over the sorted stems
+    assert _set_by_stem_label(df1) == {"bench": 1, "squat": 2, "row": 3}
+    assert _set_by_stem_label(df1) == _set_by_stem_label(df2)
+
+
+def test_load_sets_returns_sensor_sets_with_filename_metadata(tmp_path):
+    _make(tmp_path, ["A-bench-heavy", "B-squat-medium2"])
+    sets = DataLoader(tmp_path).load_sets()
+    assert [s.meta["set"] for s in sets] == [1, 2]
+    assert sets[1].meta["participant"] == "B"
+    assert sets[1].meta["label"] == "squat"
+    assert sets[1].meta["category"] == "medium"  # trailing digits stripped
+    assert sets[0].acc.unit == "g" and sets[0].gyr.unit == "deg/s"
+    assert len(sets[0].acc) == 100 and len(sets[0].gyr) == 200
 
 
 def test_unpaired_stem_warns_and_is_dropped(tmp_path, caplog):
@@ -72,24 +82,22 @@ def test_unpaired_stem_warns_and_is_dropped(tmp_path, caplog):
     )
     loader = DataLoader(tmp_path)
     with caplog.at_level(logging.WARNING, logger="workout_ml.data.preprocessor"):
-        acc, gyr = loader.load_data()
+        df = loader.load_data()
     assert any("unpaired" in r.message and "B-squat-medium" in r.message for r in caplog.records)
     assert len(loader.unpaired_stems) == 1
-    assert set(acc["label"]) == set(gyr["label"]) == {"bench", "row"}
-    assert sorted(acc["set"].unique()) == sorted(gyr["set"].unique()) == [1, 2]
+    assert set(df["label"]) == {"bench", "row"}
+    assert sorted(df["set"].unique()) == [1, 2]
 
 
 def test_duplicate_reexport_files_are_ignored(tmp_path, caplog):
     _make(tmp_path, ["A-bench-heavy", "B-squat-medium"], duplicates=("A-bench-heavy",))
     loader = DataLoader(tmp_path)
     with caplog.at_level(logging.WARNING, logger="workout_ml.data.preprocessor"):
-        acc, gyr = loader.load_data()
+        df = loader.load_data()
     assert len(loader.duplicate_files) == 2
     assert len(loader.unpaired_stems) == 0
-    assert acc["set"].nunique() == 2
+    assert df["set"].nunique() == 2
     # the kept file is the first in sorted order (1.4.4), not the +24h copy
-    first = acc[acc["label"] == "bench"]
-    assert first.index.min() == pd.Timestamp(T0_MS, unit="ms")
-    merged = loader.merge_sensors(acc, gyr)
-    out = loader.resample_data(merged)
-    assert out["set"].nunique() == 2
+    first = df[df["label"] == "bench"]
+    assert first.index.min() == pd.Timestamp(T0_MS, unit="ms").floor("200ms")
+    assert first.index.max() < pd.Timestamp(T0_MS, unit="ms") + pd.Timedelta(hours=1)

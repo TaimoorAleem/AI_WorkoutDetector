@@ -206,7 +206,9 @@ python-dotenv==1.2.4
 pywin32==312 ; sys_platform == 'win32'
     # via docker
 pyyaml==6.0.3
-    # via mlflow-skinny
+    # via
+    #   workout-ml (ml/pyproject.toml)
+    #   mlflow-skinny
 requests==2.34.2
     # via
     #   databricks-sdk

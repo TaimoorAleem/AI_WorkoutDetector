@@ -8,6 +8,7 @@ MODULES = [
     "workout_ml",
     "workout_ml.config",
     "workout_ml.data.preprocessor",
+    "workout_ml.sensors",
     "workout_ml.features.engineer_features",
     "workout_ml.features.DataTransformation",
     "workout_ml.features.TemporalAbstraction",
@@ -49,13 +50,11 @@ def raw_dir(tmp_path):
     return tmp_path
 
 
-def test_dataloader_load_merge_resample(raw_dir):
+def test_dataloader_load_data(raw_dir):
     from workout_ml.data.preprocessor import DataLoader
 
     loader = DataLoader(raw_dir)
-    acc, gyr = loader.load_data()
-    merged = loader.merge_sensors(acc, gyr)
-    out = loader.resample_data(merged, sampling_rule="200ms")
+    out = loader.load_data()
 
     for col in [
         "acc_x",
