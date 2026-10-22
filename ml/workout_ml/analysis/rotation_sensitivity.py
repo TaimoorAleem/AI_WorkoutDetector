@@ -7,7 +7,8 @@ and evaluated on every rotated version of the held-out data.
 Variants:
 - ``baseline``: basic+derived+pca+temporal / NN
 - ``R1``: magnitude-only features (acc_r, gyr_r and their rolling statistics) / NN
-- ``R2``: baseline features and model, training sets augmented with K random rotations
+- ``R2``, ``R2w``, ``R2w8``: baseline features and model, training sets = originals plus K
+  randomly rotated copies (K=4/4/8, max angle 15/30/30 deg)
 
 Usage:
     python -m workout_ml.analysis.rotation_sensitivity [--tracking-uri URI] [--no-mlflow]
@@ -50,6 +51,9 @@ AXIS_SEED = 20240611
 AUG_SEED = 20240612
 AUG_K = 4
 AUG_MAX_DEG = 15.0
+# augmentation variants: name -> (K rotated copies, max angle in degrees). The training set
+# is the originals plus K rotated copies (one random R per set copy); same AUG_SEED for all.
+AUG_VARIANTS = {"R2": (4, 15.0), "R2w": (4, 30.0), "R2w8": (8, 30.0)}
 SIGNED_AXES = {
     "+x": (1, 0, 0),
     "-x": (-1, 0, 0),
@@ -58,7 +62,7 @@ SIGNED_AXES = {
     "+z": (0, 0, 1),
     "-z": (0, 0, -1),
 }
-VARIANTS = ("baseline", "R1", "R2")
+VARIANTS = ("baseline", "R1", "R2", "R2w", "R2w8")
 BASELINE_SET = "basic+derived+pca+temporal"
 MODEL = "NN"
 # section 7.3 tolerances (percentage points, expressed as fractions)
@@ -248,7 +252,8 @@ def theta_tol(table, variant, axes=None):
 
 
 # --------------------------------------------------------------------------- main analysis
-def run_analysis(cleaned, n_jobs=-1):
+def run_analysis(cleaned, n_jobs=-1, variants=VARIANTS):
+    """Fold-level rows for the requested ``variants`` only."""
     classes = sorted(cleaned["label"].unique())
     conditions = build_conditions()
     participants = sorted(cleaned["participant"].unique())
@@ -260,9 +265,13 @@ def run_analysis(cleaned, n_jobs=-1):
     base_fs = fsets[BASELINE_SET]
     mag_fs = lopo.FeatureSet("magnitude", tuple(magnitude_columns(all_cols)), use_pca=False)
 
-    logger.info("Featurizing %d R2 augmentation copies", AUG_K)
-    rng = np.random.default_rng(AUG_SEED)
-    aug = [engineer(rotate_sets_randomly(cleaned, rng)) for _ in range(AUG_K)]
+    aug = {}
+    for v in variants:
+        if v in AUG_VARIANTS:
+            k, max_deg = AUG_VARIANTS[v]
+            logger.info("Featurizing %d augmentation copies for %s", k, v)
+            rng = np.random.default_rng(AUG_SEED)
+            aug[v] = [engineer(rotate_sets_randomly(cleaned, rng, max_deg)) for _ in range(k)]
 
     logger.info("Featurizing %d participants x %d rotations", len(participants), len(conditions))
     jobs, keys = [], []
@@ -280,18 +289,20 @@ def run_analysis(cleaned, n_jobs=-1):
     for p in participants:
         train0 = feat0[feat0["participant"] != p]
         logger.info("Fold: held-out %s", p)
-        models = {
-            "baseline": lopo.build_pipeline(base_fs, MODEL).fit(
+        models = {}
+        if "baseline" in variants:
+            models["baseline"] = lopo.build_pipeline(base_fs, MODEL).fit(
                 train0[list(base_fs.columns)], train0["label"]
-            ),
-            "R1": lopo.build_pipeline(mag_fs, MODEL).fit(
+            )
+        if "R1" in variants:
+            models["R1"] = lopo.build_pipeline(mag_fs, MODEL).fit(
                 train0[list(mag_fs.columns)], train0["label"]
-            ),
-        }
-        train2 = pd.concat([train0] + [a[a["participant"] != p] for a in aug])
-        models["R2"] = lopo.build_pipeline(base_fs, MODEL).fit(
-            train2[list(base_fs.columns)], train2["label"]
-        )
+            )
+        for v, copies in aug.items():
+            train2 = pd.concat([train0] + [a[a["participant"] != p] for a in copies])
+            models[v] = lopo.build_pipeline(base_fs, MODEL).fit(
+                train2[list(base_fs.columns)], train2["label"]
+            )
         for theta, axis, _ in conditions:
             ft = test_feats[(p, theta, axis)]
             y = ft["label"].to_numpy()
@@ -351,7 +362,13 @@ def summarize_tables(table):
 
 def make_plot(tables, path):
     fig, ax = plt.subplots(figsize=(7, 4.2), dpi=100)
-    colors = {"baseline": "#1f77b4", "R1": "#2ca02c", "R2": "#d62728"}
+    colors = {
+        "baseline": "#1f77b4",
+        "R1": "#2ca02c",
+        "R2": "#d62728",
+        "R2w": "#ff7f0e",
+        "R2w8": "#9467bd",
+    }
     for v, t in tables.items():
         ax.plot(t["theta"], t["worst_set_acc"], "-o", color=colors[v], label=f"{v} worst axis")
         ax.plot(
@@ -375,9 +392,13 @@ def render_report(table, tables, tols, meta):
         f"> {meta}",
         "",
         "The held-out participant's acc and gyro columns are rotated by the same R before "
-        "feature engineering. Models are trained on unrotated data (R2: the original training "
-        f"sets plus {AUG_K} copies under random rotations, angle U[0, {AUG_MAX_DEG:g}] deg, "
-        "random axis, one R per set copy). Metrics are means over the 5 LOPO folds. "
+        "feature engineering. Models are trained on unrotated data, except the augmented "
+        "variants. Augmentation method: the training set is the original (unrotated) training "
+        "sets PLUS K rotated copies of them (not K copies only); each copy of each set gets "
+        "its own random R (uniform random axis, angle uniform in [0, max]), applied to acc "
+        "and gyro before feature engineering; same seed for every augmented variant. "
+        + "; ".join(f"{n}: K={k}, max {d:g} deg" for n, (k, d) in AUG_VARIANTS.items())
+        + ". Metrics are means over the 5 LOPO folds. "
         "'Worst axis' = the signed axis (+-x, +-y, +-z) with the lowest set accuracy at that "
         f"theta; 'rand' = mean over {N_RANDOM_AXES} seeded random axes. 'Kabsch' is the "
         "equivalent gravity residual 2 sin(theta/2) in g. 'conf' is the pooled "
@@ -437,15 +458,33 @@ def main(argv=None):
     parser.add_argument("--tracking-uri", default=None)
     parser.add_argument("--no-mlflow", action="store_true")
     parser.add_argument("--n-jobs", type=int, default=-1)
+    parser.add_argument(
+        "--fresh", action="store_true", help="ignore cached per-fold results and rerun everything"
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     warnings.filterwarnings("ignore")
     start = time.perf_counter()
     config.ensure_dirs()
 
+    cached = pd.DataFrame()
+    if not args.fresh and FOLDS_CSV_PATH.exists():
+        cached = pd.read_csv(FOLDS_CSV_PATH)
+        cached = cached[cached["variant"].isin(VARIANTS)]
+    todo = [v for v in VARIANTS if v not in set(cached.get("variant", []))]
+    logger.info(
+        "Variants reused from %s: %s; running: %s",
+        FOLDS_CSV_PATH.name,
+        [v for v in VARIANTS if v not in todo],
+        todo,
+    )
     cleaned = load_cleaned()
-    folds = run_analysis(cleaned, n_jobs=args.n_jobs)
+    new = run_analysis(cleaned, n_jobs=args.n_jobs, variants=todo) if todo else pd.DataFrame()
     runtime = time.perf_counter() - start
+    folds = pd.concat([cached, new], ignore_index=True)
+    folds["variant"] = pd.Categorical(folds["variant"], categories=list(VARIANTS), ordered=True)
+    folds = folds.sort_values("variant", kind="stable").reset_index(drop=True)
+    folds["variant"] = folds["variant"].astype(str)
     CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     folds.to_csv(FOLDS_CSV_PATH, index=False)
     table = aggregate(folds)
@@ -459,7 +498,9 @@ def main(argv=None):
     make_plot(tables, PLOT_PATH)
     sha, dirty = tracking.git_info()
     meta = (
-        f"Code {sha[:8]} (dirty={dirty}), data md5 {tracking.data_md5()}, runtime {runtime:.0f} s."
+        f"Code {sha[:8]} (dirty={dirty}), data md5 {tracking.data_md5()}, "
+        f"computed this invocation: {', '.join(todo) or 'none'} ({runtime:.0f} s); "
+        "other variants reused from the cached per-fold results of the same code and data."
     )
     REPORT_PATH.write_text(render_report(table, tables, tols, meta), encoding="utf-8")
 
@@ -477,7 +518,7 @@ def main(argv=None):
         import mlflow
 
         tracking.setup_tracking(args.tracking_uri, experiment=EXPERIMENT)
-        for v in VARIANTS:
+        for v in todo:  # only variants computed in this invocation get a new run
             with mlflow.start_run(run_name=v) as run:
                 mlflow.set_tags(
                     {"git_sha": sha, "git_dirty": dirty, "data_md5": tracking.data_md5()}
@@ -490,9 +531,9 @@ def main(argv=None):
                         "thetas": str(THETAS),
                         "n_random_axes": N_RANDOM_AXES,
                         "axis_seed": AXIS_SEED,
-                        "aug_k": AUG_K if v == "R2" else 0,
-                        "aug_max_deg": AUG_MAX_DEG if v == "R2" else 0,
-                        "aug_seed": AUG_SEED if v == "R2" else "none",
+                        "aug_k": AUG_VARIANTS[v][0] if v in AUG_VARIANTS else 0,
+                        "aug_max_deg": AUG_VARIANTS[v][1] if v in AUG_VARIANTS else 0,
+                        "aug_seed": AUG_SEED if v in AUG_VARIANTS else "none",
                     }
                 )
                 tracking.log_flat_params("hp", lopo.model_hyperparameters(MODEL))
