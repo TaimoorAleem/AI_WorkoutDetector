@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 2: Wear OS + phone recorder (Phases 0 and 1 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Phase 2 tasks P1 (Gradle skeleton + `:protocol` + golden files + Python reader) ‖ A1 (rotation augmentation default), per `docs/specs/phase2-recorder.md` §9. Then P2 (`:wear`) ‖ P3 (`:mobile`), then P4 (Android CI).
+- **Next step:** P2 (`:wear`) ‖ P3 (`:mobile`) running; rotation-sensitivity rerun for KNN/RF (the new best model with augmentation) running. Then P4 (Android CI), then the owner's device smoke test.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
@@ -19,7 +19,8 @@
 
 ## Blockers / open questions
 - Rep counter fails every §6.5 rep gate on its own (training) data after cleaning: MAE 1.05, exact 40%, ±1 81%, OHP MAE 1.90. Optimistic (cutoffs tuned on this data; expected reps assumed). Phase 4 rework is mandatory.
-- Resolved (D-018): the baseline tolerated only 2° of misalignment; rotation augmentation (≤30°, K=8) raises it to 10° at a cost of 0.5 pp macro-F1. Not yet wired into the default training pipeline.
+- Resolved (D-018): the baseline tolerated only 2° of misalignment; rotation augmentation (≤30°, K=8) raises it to 10°. Now the default training regime (A1).
+- Open: with augmentation the best model became temporal/KNN (set acc 0.986), but θ_tol was only measured for the NN. KNN/RF sensitivity run in progress; don't treat KNN as production until it's measured.
 
 ## Phase checklists
 
@@ -43,8 +44,10 @@
 
 ### Phase 2: Wear OS + phone recorder
 - [x] [O] Spec: `docs/specs/phase2-recorder.md` (continuous sessions + segments, Raw Format v1, schemas, golden files, Data Layer paths)
-- [ ] [S] P1 Gradle skeleton + `:protocol` + schemas + golden zips + Python reader `sensors/android.py`
-- [ ] [S] A1 ‖ Rotation augmentation as default training regime (D-018)
+- [x] [S] P1 Gradle 9.8 / AGP 9.4 / Kotlin 2.4 project; `:protocol` (writer, reader, zip, resolver, stats), JSON Schemas, deterministic golden sessions, Python reader + CLI; 24 Kotlin + 22 Python tests
+- [x] [O] Data Layer contract in `:protocol` (`DataLayer.kt`: paths, capabilities, payloads)
+- [x] [S] A1 Rotation augmentation default (`workout_ml/augment.py`); `--no-augment` reproduces Phase 0 exactly; augmented NN matches R2w8; new best temporal/KNN 0.966 / 0.959 / 0.986; runtime 20 min (7 min without)
+- [ ] [S] Rotation sensitivity for KNN and RF (baseline vs R2w8)
 - [ ] [S] P2 `:wear` ‖ [S] P3 `:mobile`
 - [ ] [S] P4 `android-ci.yml`
 - [ ] [U] Smoke test on watch or emulator; record measured rate/jitter
@@ -81,6 +84,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: P1, Data Layer contract and A1 merged. All three Sonnet agents hit the usage limit at once and resumed after the 2:10 pm reset (work was saved in worktrees). A1 found that `rotation_sensitivity.py` had been broken on `dev` since S1 removed the old loader methods; its tests didn't exercise that path.
 - 2026-10-22: Phase 2 spec written. Android SDK present (platforms 30–36.1, JBR 21, phone AVD); no Wear OS image or cmdline-tools yet. Owner AFK with watch off; device steps deferred.
 - 2026-10-22: Phase 1 complete. S2b and S2a merged; R2w/R2w8 follow-up run; D-018 recorded; Phase 1 review written.
 - 2026-10-22: S1 merged. Spec corrected (anti-alias attenuation: ≥14 dB at 6 Hz, ≥20 dB at 7 Hz). Resampled row count is 8180 (82 sets, 7360 windows after trimming).
