@@ -39,11 +39,16 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
 - Android: accelerometer in m/s², gyroscope in rad/s, irregular timing.
 - Full table and per-exercise gravity vectors: `PROJECT.md` §6.1–6.2.
 
-## Current layout and commands (update as Phase 0 restructures it)
-- `src/config.py`: paths and pipeline config.
-- `src/data/preprocessor.py`: `DataLoader`, `OutlierRemover`.
-- `src/features/`: `FeatureEngineer`, filters, temporal and FFT features. `count_repetitions.py` is still an exploratory script.
-- `src/models/`: `ModelTrainer`, `LearningAlgorithms`.
-- `run_pipeline.py`: end-to-end pipeline. Raw data lives in `data/raw/MetaMotion/`, which is gitignored.
-- Environment: conda env `ai-workout-detector` (Python 3.8, being upgraded to 3.11 in Phase 0). Run with `python run_pipeline.py`.
+## Current layout and commands
+- `ml/`: the installable `workout_ml` package (`ml/pyproject.toml`, locks in `ml/requirements.lock` and `ml/requirements-dev.lock`).
+  - `workout_ml/config.py`: paths and pipeline config (`ensure_dirs()` creates output dirs).
+  - `workout_ml/data/preprocessor.py`: `DataLoader`, `OutlierRemover`.
+  - `workout_ml/features/`: `FeatureEngineer`, filters, temporal and FFT features.
+  - `workout_ml/models/`: `ModelTrainer`, `LearningAlgorithms`.
+  - `workout_ml/pipeline.py`: end-to-end pipeline (`main()`).
+  - `scripts/count_repetitions_exploration.py`: exploratory rep-counting script (not importable, to be rewritten).
+  - `tests/`: pytest suite.
+- Raw data lives in `data/raw/MetaMotion/`, tracked by DVC (`data/raw/MetaMotion.dvc`, local remote `E:/dvc-store/proprio`). Run `dvc pull` to fetch.
+- Environment: conda env `proprio` (Python 3.11). Setup: `conda activate proprio`, `pip install -r ml/requirements-dev.lock`, `pip install -e ml --no-deps`.
+- Commands: `python -m workout_ml.pipeline`, `pytest ml/tests`, `ruff check ml`.
 - Platform: Windows 11. Both the Bash tool (Git Bash) and PowerShell are available.
