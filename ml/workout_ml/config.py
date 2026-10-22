@@ -24,18 +24,11 @@ def ensure_dirs():
         d.mkdir(parents=True, exist_ok=True)
 
 
-# Model configuration
-# Note: LearningAlgorithms performs its own grid search internally
-# These are the default parameters if gridsearch=False
-MODEL_DEFAULTS = {
-    "use_gridsearch": True,  # Enable grid search in LearningAlgorithms
-}
-
-# Outlier detection configuration
+# Outlier handling: mark as NaN per set, then interpolate within the set (no rows dropped).
+# Labels are never used (a per-label scope would be supervised and impossible at inference).
 OUTLIER_CONFIG = {
     "method": "chauvenet",  # Options: 'iqr', 'chauvenet', 'lof'
-    "per_label": False,  # Apply detection per label
-    # Method-specific parameters
+    "scope": "set",  # statistics are computed within one set
     "C": 2,  # For Chauvenet method (certainty parameter, typically 1-10)
     "n": 20,  # For LOF method (number of neighbors)
 }
@@ -43,10 +36,11 @@ OUTLIER_CONFIG = {
 # Feature engineering configuration
 FEATURE_CONFIG = {
     "predictor_columns": ["acc_x", "acc_y", "acc_z", "gyr_x", "gyr_y", "gyr_z"],
-    "window_size": 10,
+    "window_size": 10,  # FFT window
+    "rolling_windows": [5, 10],  # rolling mean/std/min/max windows
     "sampling_frequency": 1000 / 200,  # 5 Hz
     "lowpass_cutoff": 1.3,
-    "pca_components": 3,
+    "pca_components": 3,  # fitted in-fold during modelling, never on the full dataset
 }
 
 # Repetition counting configuration (low-pass filter + local maxima)
@@ -66,8 +60,21 @@ REP_CONFIG = {
     "expected_reps": {"heavy": 5, "medium": 10},
 }
 
-# Training configuration
-TRAIN_CONFIG = {"test_size": 0.2, "validation_size": 0.15, "random_state": 42, "stratify": True}
+# Evaluation configuration: leave-one-participant-out (LOPO), inner CV grouped by participant
+EVAL_CONFIG = {
+    "cv": "LOPO",
+    "group_column": "participant",
+    "random_state": 42,
+    "inner_cv_splits": 4,  # GroupKFold, only used by --tune / --forward-selection
+    "selection_metric": "lopo_window_macro_f1_mean",  # tiebreak: lopo_set_acc_mean
+}
+
+# MLflow tracking
+MLFLOW_EXPERIMENT = "proprio-classifier"
+MLFLOW_DEFAULT_DB = PROJECT_ROOT / "mlflow.db"
+MLFLOW_ARTIFACT_ROOT = PROJECT_ROOT / "mlartifacts"
+DVC_DATA_FILE = DATA_DIR / "raw" / "MetaMotion.dvc"
+REPORT_PATH = PROJECT_ROOT / "docs" / "reports" / "phase0-baseline.md"
 
 # Plotting configuration
 PLOT_CONFIG = {"style": "fivethirtyeight", "figure_size": (20, 5), "dpi": 100, "line_width": 2}

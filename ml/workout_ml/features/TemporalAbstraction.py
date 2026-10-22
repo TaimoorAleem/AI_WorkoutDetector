@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 # Class to abstract a history of numerical values we can use as an attribute.
@@ -20,14 +21,15 @@ class NumericalAbstraction:
             return np.nan
 
     # Abstract numerical columns specified given a window size (i.e. the number of time points from the past considered) and an aggregation function.
+    # The new columns are built together and concatenated once (no DataFrame fragmentation).
+    # The window is trailing, so a row only sees itself and earlier rows. The caller is
+    # responsible for passing a single set; the first window_size - 1 rows are NaN.
     def abstract_numerical(self, data_table, cols, window_size, aggregation_function):
-
-        # Create new columns for the temporal data, pass over the dataset and compute values
-        for col in cols:
-            data_table[col + "_temp_" + aggregation_function + "_ws_" + str(window_size)] = (
-                data_table[col]
-                .rolling(window_size)
-                .apply(self.aggregate_value(aggregation_function))
+        func = self.aggregate_value(aggregation_function)
+        new = {
+            col + "_temp_" + aggregation_function + "_ws_" + str(window_size): (
+                data_table[col].rolling(window_size).apply(func, raw=True)
             )
-
-        return data_table
+            for col in cols
+        }
+        return pd.concat([data_table, pd.DataFrame(new, index=data_table.index)], axis=1)

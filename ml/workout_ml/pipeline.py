@@ -1,183 +1,117 @@
 """
-Pipeline script demonstrating end-to-end ML workflow
+End-to-end pipeline: load, per-set outlier handling, per-set features, LOPO evaluation
+tracked in MLflow, rep-counter evaluation and the baseline report.
+
+Usage:
+    python -m workout_ml.pipeline [--tune] [--forward-selection] [--models RF DT ...]
 """
 
+import argparse
 import logging
+import time
+import warnings
 
-from workout_ml import config
-from workout_ml.data.preprocessor import DataLoader, OutlierRemover
-from workout_ml.features.engineer_features import FeatureEngineer
-from workout_ml.models.model_trainer import ModelTrainer
+import matplotlib
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+matplotlib.use("Agg")  # headless: pipeline code never opens a window
+
+from workout_ml import config  # noqa: E402
+from workout_ml.data.preprocessor import DataLoader, OutlierRemover  # noqa: E402
+from workout_ml.features.engineer_features import FeatureEngineer  # noqa: E402
+from workout_ml.models.experiment import DEFAULT_MODELS, run_experiment  # noqa: E402
+from workout_ml.reps.evaluate import evaluate_counter, summarize  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--tune",
+        action="store_true",
+        help="GridSearchCV (GroupKFold by participant) inside each training fold",
+    )
+    parser.add_argument(
+        "--forward-selection",
+        action="store_true",
+        help="add a 'forward-selected' feature set, selected inside each training fold",
+    )
+    parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS, choices=DEFAULT_MODELS)
+    parser.add_argument("--tracking-uri", default=None, help="overrides MLFLOW_TRACKING_URI")
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
     """Run the complete ML pipeline"""
+    args = parse_args(argv)
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    start = time.perf_counter()
     config.ensure_dirs()
 
-    # Step 1: Load and preprocess data
-    logger.info("=" * 50)
+    # Step 1: load, merge, resample, per-set outlier handling
     logger.info("STEP 1: Loading and preprocessing data")
-    logger.info("=" * 50)
-
     loader = DataLoader(config.RAW_DATA_PATH)
     acc_df, gyr_df = loader.load_data()
-
-    # Merge sensor data
     merged_df = loader.merge_sensors(acc_df, gyr_df)
-
-    # Resample to 200ms intervals
     resampled_df = loader.resample_data(merged_df, sampling_rule="200ms")
 
-    # Remove outliers using method from config
-    outlier_method = config.OUTLIER_CONFIG["method"]
-    logger.info(f"Using {outlier_method} method for outlier detection")
-
-    outlier_remover = OutlierRemover()
-    sensor_columns = ["acc_x", "acc_y", "acc_z", "gyr_x", "gyr_y", "gyr_z"]
-
-    # Prepare outlier kwargs based on config
-    outlier_kwargs = {}
-    if config.OUTLIER_CONFIG.get("per_label"):
-        outlier_kwargs["per_label"] = True
-    if outlier_method == "chauvenet":
-        outlier_kwargs["C"] = config.OUTLIER_CONFIG.get("C", 2)
-    elif outlier_method == "lof":
-        outlier_kwargs["n"] = config.OUTLIER_CONFIG.get("n", 20)
-
-    outliers_removed_df = outlier_remover.remove_outliers(
-        resampled_df, sensor_columns, method=outlier_method, **outlier_kwargs
+    oc = config.OUTLIER_CONFIG
+    sensor_columns = config.FEATURE_CONFIG["predictor_columns"]
+    cleaned_df = OutlierRemover.clean_outliers(
+        resampled_df, sensor_columns, method=oc["method"], scope=oc["scope"], C=oc["C"], n=oc["n"]
     )
+    cleaned_df.to_pickle(config.INTERIM_DATA_PATH / "01_data_processed.pkl")
 
-    # Save interim data
-    interim_path = config.INTERIM_DATA_PATH / "01_data_processed.pkl"
-    config.INTERIM_DATA_PATH.mkdir(parents=True, exist_ok=True)
-    outliers_removed_df.to_pickle(interim_path)
-    logger.info(f"Saved preprocessed data to {interim_path}")
+    # Step 2: per-set feature engineering
+    logger.info("STEP 2: Engineering features (per set)")
+    featured_df = FeatureEngineer(config.FEATURE_CONFIG).engineer_features(cleaned_df)
+    featured_df.to_pickle(config.INTERIM_DATA_PATH / "02_feature_engineered.pkl")
 
-    # Step 2: Feature Engineering
-    logger.info("=" * 50)
-    logger.info("STEP 2: Engineering features")
-    logger.info("=" * 50)
+    # Step 3: rep counter (on cleaned, pre-feature data)
+    logger.info("STEP 3: Evaluating the repetition counter")
+    rep_summary = summarize(evaluate_counter(cleaned_df))
+    logger.info("Rep counter summary:\n%s", rep_summary.round(3).to_string())
 
-    engineer = FeatureEngineer(config.FEATURE_CONFIG)
-    featured_df = engineer.engineer_features(outliers_removed_df)
-
-    # Save featured data
-    featured_path = config.INTERIM_DATA_PATH / "02_feature_engineered.pkl"
-    featured_df.to_pickle(featured_path)
-    logger.info(f"Saved feature-engineered data to {featured_path}")
-
-    # Step 3: Model Training
-    logger.info("=" * 50)
-    logger.info("STEP 3: Training models")
-    logger.info("=" * 50)
-
-    trainer = ModelTrainer(config=config.TRAIN_CONFIG, output_dir=config.MODELS_DIR)
-
-    # Prepare data
-    X_train, X_test, y_train, y_test = trainer.prepare_data(featured_df)
-
-    # Feature selection
-    logger.info("\nPerforming forward feature selection...")
-    selected_features, ordered_features, ordered_scores = trainer.select_features(
-        X_train, y_train, max_features=10
-    )
-
-    # Plot feature selection results
-    trainer.plot_feature_importance(
-        ordered_scores, ordered_features, save_path=config.PLOTS_DIR / "feature_selection.png"
-    )
-
-    # Define feature sets for comparison
-    basic_features = ["acc_x", "acc_y", "acc_z", "gyr_x", "gyr_y", "gyr_z"]
-    square_features = ["acc_r", "gyr_r"] if "acc_r" in X_train.columns else []
-    pca_features = ["pca_1", "pca_2", "pca_3"] if "pca_1" in X_train.columns else []
-    time_features = [f for f in X_train.columns if "_temp_" in f]
-    frequency_features = [f for f in X_train.columns if ("_freq_" in f) or ("_pse" in f)]
-
-    feature_set_1 = list(set(basic_features))
-    feature_set_2 = list(set(basic_features + square_features + pca_features))
-    feature_set_3 = list(set(basic_features + square_features + pca_features + time_features))
-    feature_set_4 = list(set(feature_set_3 + frequency_features))
-
-    possible_feature_sets = [
-        feature_set_1,
-        feature_set_2,
-        feature_set_3,
-        feature_set_4,
-        selected_features,
+    # Step 4: LOPO evaluation, tracked in MLflow
+    logger.info("STEP 4: LOPO evaluation")
+    notes = [
+        f"Duplicate re-export files ignored by the loader: {len(loader.duplicate_files)}",
+        f"Unpaired sets dropped (one sensor missing): {len(loader.unpaired_stems)}"
+        + (f" ({', '.join(loader.unpaired_stems)})" if loader.unpaired_stems else ""),
+        f"Flags: tune={args.tune}, forward_selection={args.forward_selection}",
     ]
-
-    feature_names = [
-        "Basic Features",
-        "Basic + Derived + PCA",
-        "Basic + Derived + PCA + Temporal",
-        "All Features",
-        "Selected Features",
-    ]
-
-    # Compare models (use iterations=1 for speed, increase for better results)
-    logger.info("\nComparing models across feature sets...")
-    score_df = trainer.compare_models(
-        X_train, y_train, X_test, y_test, possible_feature_sets, feature_names, iterations=1
+    outcome = run_experiment(
+        featured_df,
+        run_params={
+            "outlier": config.OUTLIER_CONFIG,
+            "features": config.FEATURE_CONFIG,
+            "eval": config.EVAL_CONFIG,
+        },
+        rep_summary=rep_summary,
+        models=args.models,
+        tune=args.tune,
+        forward_selection=args.forward_selection,
+        tracking_uri=args.tracking_uri,
+        report_path=config.REPORT_PATH,
+        n_sets=cleaned_df["set"].nunique(),
+        notes=notes,
     )
 
-    # Display results
-    logger.info("\nModel Comparison Results:")
-    logger.info(score_df.sort_values(by=["accuracy"], ascending=False).to_string())
-
-    # Plot comparison
-    trainer.plot_model_comparison(score_df, save_path=config.PLOTS_DIR / "model_comparison.png")
-
-    # Identify and train the best performing model from comparison
-    best_row = score_df.sort_values(by=["accuracy"], ascending=False).iloc[0]
-    best_model = best_row["model"]
-    best_feature_set_name = best_row["feature_set"]
-    best_accuracy = best_row["accuracy"]
-
-    # Find the corresponding feature set
-    best_feature_idx = feature_names.index(best_feature_set_name)
-    best_features = possible_feature_sets[best_feature_idx]
-
+    top = outcome.leaderboard.iloc[0]
+    logger.info("=" * 50)
     logger.info(
-        f"\nTraining best model: {best_model} with {best_feature_set_name} (accuracy: {best_accuracy:.4f})..."
+        f"Best: {top['feature_set']} / {top['model']} "
+        f"window acc {top['lopo_window_acc_mean']:.3f}, "
+        f"macro-F1 {top['lopo_window_macro_f1_mean']:.3f}, "
+        f"set acc {top['lopo_set_acc_mean']:.3f}"
     )
-    train_pred, test_pred, train_prob, test_prob = trainer.train_single_model(
-        X_train[best_features],
-        y_train,
-        X_test[best_features],
-        model_type=best_model,
-        gridsearch=True,
-    )
-
-    # Evaluate
-    metrics = trainer.evaluate(y_test, test_pred)
-    logger.info("\nFinal Model Performance:")
-    logger.info(f"Accuracy: {metrics['accuracy']:.4f}")
-    logger.info(f"Precision: {metrics['precision']:.4f}")
-    logger.info(f"Recall: {metrics['recall']:.4f}")
-    logger.info(f"F1-Score: {metrics['f1']:.4f}")
-
-    # Save metrics
-    trainer.save_metrics(metrics, "final_model_metrics.csv")
-
-    # Plot confusion matrix
-    trainer.plot_confusion_matrix(
-        y_test,
-        test_pred,
-        title="Final Model Confusion Matrix",
-        save_path=config.PLOTS_DIR / "confusion_matrix.png",
-    )
-
-    logger.info("=" * 50)
-    logger.info("Pipeline completed successfully!")
-    logger.info("=" * 50)
+    logger.info(f"MLflow parent run: {outcome.parent_run_id}")
+    logger.info(f"Pipeline completed in {time.perf_counter() - start:.0f} s")
+    return outcome
 
 
 if __name__ == "__main__":

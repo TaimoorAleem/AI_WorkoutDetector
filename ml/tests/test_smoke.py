@@ -12,8 +12,10 @@ MODULES = [
     "workout_ml.features.DataTransformation",
     "workout_ml.features.TemporalAbstraction",
     "workout_ml.features.FrequencyAbstraction",
-    "workout_ml.models.LearningAlgorithms",
-    "workout_ml.models.model_trainer",
+    "workout_ml.models.lopo",
+    "workout_ml.models.experiment",
+    "workout_ml.tracking",
+    "workout_ml.reporting",
     "workout_ml.pipeline",
 ]
 
