@@ -17,6 +17,7 @@ import dev.proprio.protocol.SegmentSource
 import dev.proprio.protocol.SessionKind
 import dev.proprio.wear.ui.WatchScreen
 import dev.proprio.wear.platform.appLog
+import dev.proprio.wear.session.StartRequestHandler
 import dev.proprio.wear.session.keepScreenOn
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -50,10 +51,34 @@ class MainActivity : ComponentActivity() {
         appLog("screen_on ${if (on) "held (min brightness)" else "released"}")
     }
 
+    /** Start request from the phone's remote launch; consumed once, run when the activity is visible. */
+    private var pendingStartUri: String? = null
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingStartUri = intent.dataString
+        runPendingStart()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        runPendingStart()
+    }
+
+    private fun runPendingStart() {
+        val uri = pendingStartUri ?: return
+        if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return
+        pendingStartUri = null
+        val graph = (application as ProprioApp).graph
+        lifecycleScope.launch { StartRequestHandler(graph.controller, ::appLog).handle(uri) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val graph = (application as ProprioApp).graph
         val c = graph.controller
+        pendingStartUri = if (savedInstanceState == null) intent?.dataString else null
 
         // Runtime permissions: the ongoing recording notification (API 33+) and the Health Services exercise.
         // Everything works if they are denied: the notification is merely hidden / the exercise is skipped.

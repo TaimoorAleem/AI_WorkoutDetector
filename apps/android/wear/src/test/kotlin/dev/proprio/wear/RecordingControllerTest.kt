@@ -309,4 +309,68 @@ class RecordingControllerTest {
             "twelve_up", "twelve_down", "rot_x", "rot_y", "rot_z",
         )
     }
+
+    @Test
+    fun watchTapsWithinOneSecondOfTheLastAcceptedTapAreIgnored() = runTest {
+        val h = harness()
+        assertTrue(h.controller.startSession(SessionKind.GYM))
+        advanceTimeBy(1_000)
+        assertTrue(h.controller.startSegment(MarkKind.SET, SegmentSource.WATCH))
+        advanceTimeBy(700)
+        assertFalse(h.controller.stopSegment(SegmentSource.WATCH)) // 0.7 s: accidental double press
+        assertEquals(1, h.controller.state.value.openSegmentId)
+        advanceTimeBy(299)
+        assertFalse(h.controller.stopSegment(SegmentSource.WATCH)) // 0.999 s after the accepted start; ignored taps don't extend the window
+        advanceTimeBy(1)
+        assertTrue(h.controller.stopSegment(SegmentSource.WATCH)) // exactly 1.0 s: accepted
+        assertNull(h.controller.state.value.openSegmentId)
+        runCurrent()
+        assertEquals(listOf(SegmentEvent.Event.STARTED, SegmentEvent.Event.STOPPED), h.events().map { it.event })
+    }
+
+    @Test
+    fun phoneCommandsAreNotDebounced() = runTest {
+        val h = harness()
+        assertTrue(h.controller.startSession(SessionKind.GYM))
+        assertTrue(h.controller.startSegment(MarkKind.SET, SegmentSource.WATCH))
+        advanceTimeBy(100)
+        assertTrue(h.controller.stopSegment(SegmentSource.PHONE))
+        advanceTimeBy(100)
+        assertTrue(h.controller.startSegment(MarkKind.OTHER, SegmentSource.PHONE))
+        advanceTimeBy(100)
+        assertTrue(h.controller.stopSegment(SegmentSource.PHONE))
+    }
+
+    @Test
+    fun startRequestIntentStartsASessionWithPhoneSource() = runTest {
+        val h = harness()
+        val handler = dev.proprio.wear.session.StartRequestHandler(h.controller)
+        assertFalse(handler.handle("https://example.com/x"))
+        assertFalse(h.controller.state.value.recording)
+        assertTrue(handler.handle("proprio://session/start?kind=CALIBRATION&participant=P01"))
+        assertTrue(h.controller.state.value.recording)
+        assertEquals(SessionKind.CALIBRATION, h.controller.state.value.kind)
+        assertEquals(1, h.host.enters)
+        assertFalse(handler.handle("proprio://session/start?kind=GYM")) // already running: ignored
+    }
+
+    @Test
+    fun startRequestParsing() {
+        val r = dev.proprio.wear.session.StartRequest.parse("proprio://session/start?kind=gym&participant=P%2F01")!!
+        assertEquals(SessionKind.GYM, r.kind)
+        assertEquals("P/01", r.participantId)
+        assertEquals(SessionKind.GYM, dev.proprio.wear.session.StartRequest.parse("proprio://session/start")!!.kind)
+        assertNull(dev.proprio.wear.session.StartRequest.parse("proprio://session/other"))
+        assertNull(dev.proprio.wear.session.StartRequest.parse(null))
+    }
+
+    @Test
+    fun recordingStateSelectsTheBlackPalette() {
+        val rec = dev.proprio.wear.ui.watchPalette(dev.proprio.wear.session.UiState(recording = true))
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF000000), rec.background)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF5A5A5A), rec.content)
+        val idle = dev.proprio.wear.ui.watchPalette(dev.proprio.wear.session.UiState())
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF000000), idle.background)
+        assertTrue(idle.content != rec.content)
+    }
 }
