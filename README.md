@@ -9,6 +9,18 @@ Each file in the dataset represents sensor data for a specific set and is named 
 
 For example: `A-bench-heavy_MetaWear_2019-01-14T14.22.49.165_C42732BE255C_Accelerometer_12.500Hz_1.4.4.csv`
 
+## Running the pipeline
+```
+conda create -n proprio python=3.11
+conda activate proprio
+pip install -r ml/requirements-dev.lock
+pip install -e ml --no-deps
+dvc pull                          # fetch data/raw/MetaMotion (or place the dataset there manually)
+python -m workout_ml.pipeline     # end-to-end pipeline
+pytest ml/tests                   # tests
+ruff check ml                     # lint
+```
+
 ## References
 
 Book: [Hoogendoorn, M. and Funk, B., Machine Learning for the Quantified Self - On the Art of Learning from Sensory Data, Springer, 2018.](https://link.springer.com/book/10.1007/978-3-319-66308-1)
