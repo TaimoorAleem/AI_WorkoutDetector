@@ -51,4 +51,5 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
 - Raw data lives in `data/raw/MetaMotion/`, tracked by DVC (`data/raw/MetaMotion.dvc`, local remote `E:/dvc-store/proprio`). Run `dvc pull` to fetch.
 - Environment: conda env `proprio` (Python 3.11). Setup: `conda activate proprio`, `pip install -r ml/requirements-dev.lock`, `pip install -e ml --no-deps`.
 - Commands: `python -m workout_ml.pipeline`, `pytest ml/tests`, `ruff check ml`.
+- Lock regeneration (cross-platform, via uv): `uv pip compile ml/pyproject.toml --universal --python-version 3.11 -o ml/requirements.lock`; add `--extra dev` for `ml/requirements-dev.lock`. CI (`.github/workflows/ml-ci.yml`) runs ruff + pytest on push/PR to `dev` and `main`.
 - Platform: Windows 11. Both the Bash tool (Git Bash) and PowerShell are available.
