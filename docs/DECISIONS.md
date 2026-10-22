@@ -55,3 +55,18 @@ They are value-identical re-exports of `*_1.4.4.csv` sets with timestamps shifte
 
 **D-017 · 2026-10-22 · Phase 0 baseline accepted; set-level accuracy is the primary product metric**
 LOPO best: NN on basic + derived + in-fold PCA + temporal features, window acc 0.963 ± 0.047, macro-F1 0.957 ± 0.054, set acc 0.963 ± 0.052. The top models are within fold noise of each other. Window macro-F1 stays as the diagnostic metric. Consequences: Phase 1 adds a rotation-sensitivity test (the model relies on absolute axes, and bench/OHP is the fragile pair); Phase 4 rep-counter rework is mandatory; dropping the FFT features is to be evaluated.
+
+**D-018 · 2026-10-22 · Train with rotation augmentation (≤ 30°, K = 8); keep the 0.15 g calibration gate; amend the §7.3 rule**
+The rotation-sensitivity study (`reports/phase1-rotation-sensitivity.md`) showed the Phase 0 model tolerates only 2° of misalignment before bench/OHP recall collapses (worst on the z axis). Results:
+- magnitude-only features: rotation-proof, but fail the macro-F1 gate at zero rotation (0.848);
+- augmentation ≤ 15° (K = 4): 5°;
+- augmentation ≤ 30° (K = 4 or K = 8): 10°, at a cost of 0.5 pp macro-F1.
+
+The pre-set rule would have picked magnitude-only features. It is amended: a remedy must itself pass the §6.5 gates at zero rotation, and the choice among passing remedies goes to the one that loses least at zero rotation. K = 8 is chosen over K = 4 for better OHP recall under large rotations.
+
+Consequences:
+- the Kabsch residual gate stays 0.15 g (≈ 8.6° < 10°);
+- augmentation becomes the default training regime (classical pipeline now, CNN in Phase 4);
+- Phase 3 evaluates baseline and augmented models on real watch data.
+
+Rejected: magnitude-only features (fail a gate); tightening calibration to 2° (likely unachievable from human posture).

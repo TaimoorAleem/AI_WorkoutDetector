@@ -4,9 +4,9 @@
 > Scope and specs live in [`PROJECT.md`](PROJECT.md), decisions in [`DECISIONS.md`](DECISIONS.md).
 
 ## Now
-- **Current phase:** Phase 1: CSF-1 normalization layer (Phase 0 complete)
+- **Current phase:** Phase 2: Wear OS + phone recorder (Phases 0 and 1 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** S2a (rotation sensitivity) still running; S2b (fake-watch generator + round trip) starting. Then orchestrator §7.3 decision.
+- **Next step:** Phase 2: orchestrator defines `:protocol` (Raw Format v1, `meta.json` schema, Data Layer messages) in a spec. In parallel, a small Sonnet task adds rotation augmentation (≤30°, K=8, D-018) as the default in the training pipeline.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`)
@@ -18,7 +18,7 @@
 
 ## Blockers / open questions
 - Rep counter fails every §6.5 rep gate on its own (training) data after cleaning: MAE 1.05, exact 40%, ±1 81%, OHP MAE 1.90. Optimistic (cutoffs tuned on this data; expected reps assumed). Phase 4 rework is mandatory.
-- Classifier is orientation-dependent (temporal stats on raw axes); bench/OHP differ by ~0.13 g on x only. Phase 1 rotation-sensitivity test decides whether robust features are needed before watch data.
+- Resolved (D-018): the baseline tolerated only 2° of misalignment; rotation augmentation (≤30°, K=8) raises it to 10° at a cost of 0.5 pp macro-F1. Not yet wired into the default training pipeline.
 
 ## Phase checklists
 
@@ -35,9 +35,10 @@
 ### Phase 1: CSF-1 normalization layer
 - [x] [O] `docs/sensor_spec.md`: CSF-1, conversion steps, profiles, fake-watch generator, tests, analyses, decision rule
 - [x] [S] S1 `sensors/` package (`to_csf`, `from_canonical`, `load_profile`, `read_metamotion`), 2 device profiles, 106 tests; pipeline rewired; real-data output bit-identical to legacy loader, leaderboard unchanged
-- [ ] [S] S2a ‖ Rotation sensitivity (§7.2) with reference curves R1 (magnitude-only) and R2 (rotation augmentation)
-- [ ] [S] S2b Fake-watch generator + round-trip test + model-level round trip (§7.1), after S1
-- [ ] [O] §7.3 decision: θ_tol, residual gate, robust features or augmentation
+- [x] [S] S2a ‖ Rotation sensitivity (§7.2): baseline θ_tol 2°, R1 30° (fails macro-F1 gate), R2 5°, R2w 10°, R2w8 10°
+- [x] [S] S2b Fake-watch generator `simulate_android` + tests; model-level round trip passes (set acc Δ 0.00 pp, macro-F1 Δ −0.27 pp, bench↔OHP +4.5%)
+- [x] [O] §7.3 decision (D-018): adopt rotation augmentation R2w8; residual gate stays 0.15 g; rule amended. Review: `docs/reports/phase1-review.md`
+- [ ] [S] Wire rotation augmentation into the default training pipeline (MLflow-logged), re-baseline
 
 ### Phase 2: Wear OS + phone recorder
 - [ ] [O] `:protocol` (Raw Format v1, meta.json schema, Data Layer messages)
@@ -77,6 +78,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-22: Phase 1 complete. S2b and S2a merged; R2w/R2w8 follow-up run; D-018 recorded; Phase 1 review written.
 - 2026-10-22: S1 merged. Spec corrected (anti-alias attenuation: ≥14 dB at 6 Hz, ≥20 dB at 7 Hz). Resampled row count is 8180 (82 sets, 7360 windows after trimming).
 - 2026-10-22: Pushed `dev`; first GitHub CI run green. Owner approved merging `dev` → `main` (fast-forward to `f8b4e77`) and pushing. Phase 1 spec written (`docs/sensor_spec.md`).
 - 2026-10-22: Phase 0 complete. 0.4b merged; clean rerun on `dev` reproduced metrics exactly (MLflow parent `f5231a5df0974e1e94a80b04f2cfe6b6`). Orchestrator review written; D-016 (duplicate raw files); PROJECT.md §6.1 corrected; Phase 1 gains a rotation-sensitivity test.

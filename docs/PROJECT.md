@@ -1,6 +1,6 @@
 # Proprio — Project Specification (source of truth)
 
-> **Status:** v1.2 · last updated 2026-10-22 (MLflow D-015; duplicate raw files D-016; Phase 0 baseline)
+> **Status:** v1.3 · last updated 2026-10-22 (MLflow D-015; duplicate raw files D-016; Phase 0 baseline D-017; rotation augmentation D-018)
 > This document is the single source of truth for Proprio's scope, features, architecture and technical specs.
 > **Rules:** scope changes require the owner's approval and must be logged in [`DECISIONS.md`](DECISIONS.md). Task status lives in [`PROGRESS.md`](PROGRESS.md), not here.
 
@@ -220,7 +220,7 @@ Proprio is a gym logger:
 
 ### 6.6 Remediation decision tree (apply in order)
 1. **Calibration gate fails:** fix the conversion or profile. Never retrain to cover a units or axes bug.
-2. **High AUC from absolute-axis features:** switch to orientation-robust features (acc_r, gyr_r, gravity-projected vertical, horizontal magnitude) and retrain on MetaMotion only.
+2. **High AUC from absolute-axis features:** models are already trained with rotation augmentation (≤ 30°, K = 8; D-018). If the gap persists, widen the augmentation or add orientation-robust features (acc_r, gyr_r, gravity-projected vertical, horizontal magnitude), and retrain on MetaMotion only. A remedy must itself pass the §6.5 gates at zero rotation (magnitude-only features failed: macro-F1 0.848).
 3. **Gap persists and ≥ 30 watch sets exist:** mix watch data into training, or fine-tune the CNN on session 1. Adopt it only if held-out watch improves by ≥ 5 pp **and** MetaMotion LOPO drops by ≤ 2 pp.
 4. **Between-user variance > 10 pp (U3):** per-user head on ≥ 3 corrected sets per exercise. Activate it only if the per-user held-out check improves.
 5. **Still failing, or any class recall < 0.6:** recollect at scale. That's the owner's decision.
@@ -241,10 +241,10 @@ Legend: [O] orchestrator (Opus) · [S] Sonnet subagent · [U] owner (physical) �
 | Phase | Weeks | Goal | Acceptance |
 |---|---|---|---|
 | 0 Hygiene + honest baseline | 1 | `ml/workout_ml` package, Python 3.11, locked requirements, DVC, rep counter as a library, leakage fixes, LOPO, CI (ruff + pytest), MLflow tracking (local server) | CI green; pipeline logs a LOPO baseline run to MLflow (window F1, set accuracy, rep MAE) |
-| 1 CSF-1 layer | 2–3 | `sensors/`, tests, fake-watch generator, pipeline on CSF, rotation-sensitivity test | §6.3 tests pass; fake-watch within 1 pp; accuracy-vs-rotation curve sets the R-fit tolerance |
+| 1 CSF-1 layer ✅ | 2–3 | `sensors/`, tests, fake-watch generator, pipeline on CSF, rotation-sensitivity test | done: 126 tests; round trip Δ ≤ 0.3 pp; θ_tol 2° → 10° with rotation augmentation (D-018); see `reports/phase1-review.md` |
 | 2 Wear OS + phone recorder | 3–5 | `:protocol`, `:wear`, `:mobile`, Python Raw v1 reader | a recorded set opens in Python; rate and jitter in metadata; calibration mode works |
 | 3 Calibration + domain shift | 5–6 | U1/U2/U3, eval harness, profile fit, `watch-val-v1` frozen | domain-shift report with all gates evaluated |
-| 4 Remediation + PyTorch | 6–8 | decision tree, robust features, 1D-CNN → ONNX, rep re-tune, CI gate, MLflow model registry + aliases | model passes gates (or provisional); `dvc repro` reproducible |
+| 4 Remediation + PyTorch | 6–8 | decision tree, robust features, 1D-CNN (trained with on-the-fly rotation augmentation) → ONNX, rep re-tune, CI gate, MLflow model registry + aliases | model passes gates (or provisional); `dvc repro` reproducible |
 | 5 Services MVP | 8–10 | OpenAPI contract, core-api, inference-svc (loads `@production` from the MLflow registry), compose (+ MLflow server), phone integration, REST Assured E2E | watch → result on phone in < 3 s locally; DLQ/retry demonstrated |
 | 6 LLM coach + RAG | 10–11 | coach-svc, pgvector, Granite (watsonx; Ollama fallback), golden-set eval logged with `mlflow.evaluate` and versioned prompts, phone chat | answers cite sources; ≥ 90% golden pass; injection prompts refused |
 | 7 CI/CD + IBM Cloud + security | 11–12 | full workflows, Trivy, CodeQL, ICR, Code Engine, IBM Databases/RabbitMQ provisioning, MLflow server (Postgres backend, COS artifacts, auth; reachable only by CI and services) | tag → deployed; phone works against cloud; all gates green |
