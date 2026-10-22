@@ -1,0 +1,6 @@
+# Golden files and schemas must be byte-stable across platforms.
+protocol/golden/** -text
+protocol/schema/*.json text eol=lf
+apps/android/gradlew text eol=lf
+apps/android/gradlew.bat text eol=crlf
+*.zip binary

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proprio.dev/schema/labels.schema.json",
+  "title": "Proprio Raw Format v1 labels.json",
+  "type": "object",
+  "required": ["labels_format", "session_id", "participant_id", "consent", "segments"],
+  "properties": {
+    "labels_format": { "const": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "participant_id": { "type": "string", "minLength": 1 },
+    "consent": {
+      "type": "object",
+      "required": ["training_use", "recorded_at_utc"],
+      "properties": {
+        "training_use": { "type": "boolean" },
+        "recorded_at_utc": { "type": "string", "minLength": 1 }
+      }
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["segment_id", "kind"],
+        "properties": {
+          "segment_id": { "type": "integer" },
+          "kind": { "enum": ["set", "rest", "other", "calibration"] },
+          "exercise": { "enum": ["bench", "squat", "dead", "ohp", "row", null] },
+          "load_kg": { "type": ["number", "null"], "minimum": 0 },
+          "category": { "enum": ["heavy", "medium", null] },
+          "reps_user": { "type": ["integer", "null"], "minimum": 0 },
+          "rpe": { "type": ["integer", "null"], "minimum": 0, "maximum": 10 },
+          "note": { "type": "string" },
+          "t_start_ns": { "type": ["integer", "null"] },
+          "t_end_ns": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "app": {
+      "type": "object",
+      "required": ["package", "version_name"],
+      "properties": {
+        "package": { "type": "string" },
+        "version_name": { "type": "string" }
+      }
+    }
+  }
+}

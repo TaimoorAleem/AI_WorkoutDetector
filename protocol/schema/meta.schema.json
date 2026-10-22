@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proprio.dev/schema/meta.schema.json",
+  "title": "Proprio Raw Format v1 meta.json",
+  "type": "object",
+  "required": [
+    "raw_format",
+    "session_id",
+    "kind",
+    "complete",
+    "app",
+    "device",
+    "wrist",
+    "clock_anchor_start",
+    "sensors",
+    "started_at_utc"
+  ],
+  "properties": {
+    "raw_format": { "const": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["gym", "calibration"] },
+    "complete": { "type": "boolean" },
+    "app": {
+      "type": "object",
+      "required": ["package", "version_name", "version_code"],
+      "properties": {
+        "package": { "type": "string" },
+        "version_name": { "type": "string" },
+        "version_code": { "type": "integer" }
+      }
+    },
+    "device": {
+      "type": "object",
+      "required": ["manufacturer", "model", "product", "sdk_int", "release", "fingerprint"],
+      "properties": {
+        "manufacturer": { "type": "string" },
+        "model": { "type": "string" },
+        "product": { "type": "string" },
+        "sdk_int": { "type": "integer" },
+        "release": { "type": "string" },
+        "fingerprint": { "type": "string" }
+      }
+    },
+    "wrist": { "enum": ["left"] },
+    "clock_anchor_start": { "$ref": "#/$defs/clock_anchor" },
+    "clock_anchor_end": { "$ref": "#/$defs/clock_anchor" },
+    "sensors": {
+      "type": "object",
+      "required": ["acc", "gyr"],
+      "properties": {
+        "acc": { "$ref": "#/$defs/sensor" },
+        "gyr": { "$ref": "#/$defs/sensor" }
+      }
+    },
+    "sample_counts": {
+      "type": "object",
+      "required": ["acc", "gyr"],
+      "properties": {
+        "acc": { "type": "integer", "minimum": 0 },
+        "gyr": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "started_at_utc": { "type": "string", "minLength": 1 },
+    "ended_at_utc": { "type": "string", "minLength": 1 }
+  },
+  "if": { "properties": { "complete": { "const": true } }, "required": ["complete"] },
+  "then": { "required": ["clock_anchor_end", "sample_counts", "ended_at_utc"] },
+  "$defs": {
+    "clock_anchor": {
+      "type": "object",
+      "required": ["elapsed_realtime_ns", "unix_time_ns"],
+      "properties": {
+        "elapsed_realtime_ns": { "type": "integer" },
+        "unix_time_ns": { "type": "integer" }
+      }
+    },
+    "sensor": {
+      "type": "object",
+      "required": [
+        "type", "name", "vendor", "version", "resolution", "maximum_range", "min_delay_us",
+        "max_delay_us", "fifo_reserved", "fifo_max", "requested_period_us",
+        "max_report_latency_us", "is_wake_up"
+      ],
+      "properties": {
+        "type": { "type": "integer" },
+        "name": { "type": "string" },
+        "vendor": { "type": "string" },
+        "version": { "type": "integer" },
+        "resolution": { "type": "number" },
+        "maximum_range": { "type": "number" },
+        "min_delay_us": { "type": "integer" },
+        "max_delay_us": { "type": "integer" },
+        "fifo_reserved": { "type": "integer" },
+        "fifo_max": { "type": "integer" },
+        "requested_period_us": { "type": "integer" },
+        "max_report_latency_us": { "type": "integer" },
+        "is_wake_up": { "type": "boolean" }
+      }
+    }
+  }
+}
