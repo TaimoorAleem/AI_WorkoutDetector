@@ -6,13 +6,13 @@
 ## Now
 - **Current phase:** Phase 3: calibration + domain shift (Phases 0–2 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Orchestrator writes the Phase 3 analysis spec (eval harness, R fit from U2, Galaxy profile, domain-shift report). Then owner task U2 (two gym sessions).
+- **Next step:** Before Sunday 2026-10-25 (owner's planned gym session = U2 session 1): orchestrator writes the U2 checklist and the Phase 3 analysis spec (eval harness, R fit, Galaxy profile, domain-shift report).
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
 - [ ] Install a Wear OS system image + AVD in Android Studio (SDK Manager → SDK Platforms → Wear OS 5 or 6 image), **or** enable Wi-Fi debugging on the Galaxy Watch (Settings → Developer options). Needed only for the Phase 2 smoke test.
 - [x] U1: calibration recording (2026-10-23, 275 s, watch in hand). All checks pass; see `docs/reports/u1-calibration.md`
-- [ ] U2: two gym sessions × 20 sets, left wrist, with video if possible (after Phase 2)
+- [ ] U2: two gym sessions × 20 sets, left wrist, with video if possible. Session 1 planned Sunday 2026-10-25
 - [ ] U3: two friends × 10 sets, plus their consent forms (after Phase 2)
 - [ ] Install and smoke-test watch and phone builds (Phases 2, 5, 7)
 - [ ] Create IBM Cloud account; approve resources and secrets (Phase 7)
@@ -96,6 +96,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-23: Added `docs/BUILD_JOURNAL.md` (full journey, blog-series structure) at the owner's request; added to the session ritual. U2 session 1 planned for Sunday 2026-10-25.
 - 2026-10-23: Pushed `dev`; first `android-ci` and `ml-ci` runs on GitHub both green. U1 recorded and analyzed: Android frame, units and gyro handedness confirmed on the real watch.
 - 2026-10-22: Phase 2 complete. P2c and P4 merged; remote launch verified on device; dimming removed at owner's request (D-025).
 - 2026-10-22: Freecess solved by keeping the dimmed recording screen on (D-024), verified on the wrist. Health Services exercise, Ongoing Activity and ambient (with AOD off) did not prevent the freeze. U1–U3 unblocked once P2c lands.

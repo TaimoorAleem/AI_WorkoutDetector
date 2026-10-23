@@ -7,6 +7,7 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
 - **`docs/PROGRESS.md`**: current phase, next step, checklists, pending owner tasks, session log.
 - **`docs/DECISIONS.md`**: append-only decision log, with the reasoning behind each decision.
 - **`docs/INTERVIEW_NOTES.md`**: the owner's interview talking points (STAR stories, decisions, numbers, likely questions). Keep it current.
+- **`docs/BUILD_JOURNAL.md`**: the full chronological story of building Proprio, organized as parts of a future blog series (what was done, why, what was rejected, results, lessons). Keep it current.
 
 ## Session ritual
 - **Start:** read `docs/PROGRESS.md` and continue from "Next step". Check `docs/PROJECT.md` before any scope-affecting work.
@@ -15,6 +16,7 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
   - Add a session-log line.
   - Log any new decision in `DECISIONS.md`.
   - Update `INTERVIEW_NOTES.md` when there's a new story, decision, number or lesson worth telling (reproducible numbers only; include the why and the alternatives).
+  - Update `BUILD_JOURNAL.md` with every meaningful step, not just highlights: add to the current part, or start the next part when a phase begins.
   - Commit the doc updates with the work.
 
 ## Git rules
