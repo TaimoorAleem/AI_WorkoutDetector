@@ -155,6 +155,9 @@ public class StorageService implements ApplicationRunner {
       } else {
         log.warn("Could not check bucket {}: {}", bucket, e.getMessage());
       }
+    } catch (RuntimeException e) {
+      // Storage being down at boot must not take the API down; uploads fail until it is back.
+      log.warn("Could not reach object storage to check bucket {}: {}", bucket, e.toString());
     }
   }
 

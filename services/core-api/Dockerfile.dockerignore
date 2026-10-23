@@ -1,0 +1,13 @@
+# Build-context filter for services/core-api/Dockerfile (BuildKit reads <Dockerfile>.dockerignore).
+# The context is the repo root, so exclude everything the image does not need.
+**
+!contracts/openapi/**
+!contracts/events/**
+!protocol/schema/**
+!services/core-api/**
+
+# ...except local build output and secrets inside the service directory.
+services/core-api/build
+services/core-api/.gradle
+services/core-api/.env
+services/core-api/**/*.pem

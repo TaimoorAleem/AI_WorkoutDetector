@@ -58,6 +58,10 @@ management:
   health:
     diskspace:
       enabled: false
+    ping:
+      enabled: false
+    ssl:
+      enabled: false
 
 springdoc:
   api-docs:
