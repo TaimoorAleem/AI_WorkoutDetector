@@ -88,6 +88,15 @@ def test_val_participant_is_deterministic_and_not_test():
     assert v1 in {"B", "C"} and v1 == cnn.choose_val_participant(train.participant, train.y)
 
 
+def test_val_participant_never_sole_holder_of_a_class():
+    # E is the only holder of "rest" in the pool and has the most classes; it must not be val
+    parts = np.array(["B"] * 3 + ["C"] * 4 + ["E"] * 5)
+    labels = np.array(
+        ["bench"] * 3 + ["bench", "squat", "squat", "ohp"] + ["bench", "squat", "ohp", "rest", "rest"]
+    )
+    assert cnn.choose_val_participant(parts, labels) == "C"
+
+
 def test_onnx_parity(tmp_path):
     torch.manual_seed(0)
     m = cnn.make_model(cnn.CnnConfig(), 6)

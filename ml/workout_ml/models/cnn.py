@@ -204,15 +204,22 @@ def make_model(cfg, n_classes):
 def choose_val_participant(participants, labels):
     """Deterministic inner-validation participant among the training participants.
 
-    The one with most distinct classes, then most windows, then the alphabetically first.
+    Candidates are participants that are not the *only* holder of any class in the training
+    pool (otherwise holding them out would remove a class from training, which is what
+    happened with ``rest``: only two participants have it). Among candidates: most distinct
+    classes, then most windows, then alphabetically first. Falls back to all participants if
+    nobody qualifies.
     """
-    best = None
-    for p in sorted(set(participants)):
-        m = participants == p
-        key = (-len(set(labels[m])), -int(m.sum()), p)
-        if best is None or key < best:
-            best = key
-    return best[2]
+    participants, labels = np.asarray(participants), np.asarray(labels)
+    people = sorted(set(participants))
+    held = {p: set(labels[participants == p]) for p in people}
+
+    def sole(p):
+        others = set().union(*(held[q] for q in people if q != p)) if len(people) > 1 else set()
+        return held[p] - others
+
+    pool = [p for p in people if not sole(p)] or people
+    return min(pool, key=lambda p: (-len(held[p]), -int((participants == p).sum()), p))
 
 
 def seed_everything(seed, threads):
@@ -549,8 +556,8 @@ def write_report(path, variants, classes, cfg, parent_id, meta, classical_path):
           f"Params: {meta['n_params']}.",
           f"- Training: AdamW lr {cfg.lr}, class-weighted cross-entropy (training fold), batch "
           f"{cfg.batch_size}, up to {cfg.max_epochs} epochs, early stopping (patience "
-          f"{cfg.patience}) on macro-F1 of one held-out *training* participant (most classes, "
-          "then most windows; never the test participant).",
+          f"{cfg.patience}) on macro-F1 of one held-out *training* participant (never the sole holder of a class "
+          "in the training pool, then most classes, then most windows; never the test participant).",
           f"- Augmentation (D-018 distribution): per window, a fresh random proper rotation "
           f"(axis uniform on the sphere, angle U[0, {cfg.aug_max_deg:.0f}] deg) on both the acc "
           "and gyro triples before magnitudes; training windows only.", ""]  # fmt: skip
