@@ -1,0 +1,18 @@
+# Build-context filter for services/inference/Dockerfile (BuildKit reads <Dockerfile>.dockerignore).
+# The context is the repo root, so exclude everything the image does not need.
+**
+!contracts/events/**
+!protocol/schema/**
+!ml/pyproject.toml
+!ml/setup.py
+!ml/workout_ml/**
+!services/inference/pyproject.toml
+!services/inference/requirements.lock
+!services/inference/proprio_inference/**
+
+# ...except bytecode, local models and secrets.
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+services/inference/.env
+services/inference/models
