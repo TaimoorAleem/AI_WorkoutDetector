@@ -114,3 +114,5 @@ local.properties
 
 # Schemas are copied into the package at build time (see ml/setup.py)
 ml/workout_ml/sensors/schemas/
+
+docs/INTERVIEW_NOTES.md
