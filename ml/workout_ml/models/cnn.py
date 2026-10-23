@@ -531,7 +531,9 @@ def _log_variant(res, final, cfg, classes, name, augment):
 
         # final model: torch flavour + ONNX + preprocessing JSON
         mlflow.pytorch.log_model(
-            model, name="model", serialization_format="pickle",
+            model,
+            name="model",
+            serialization_format="pickle",
             pip_requirements=[f"torch=={torch.__version__}"],
         )
         onnx_dir = tmp / "onnx"

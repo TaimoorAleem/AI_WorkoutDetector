@@ -62,7 +62,19 @@ def test_in_sample_end_to_end(synth, tmp_path):
     for section in ("## Calibration", "## Rotation fit", "## Gates", "bench <-> OHP", "## Rejection",
                     "## Rep counter", "## Domain diagnostics", "## Recording quality"):  # fmt: skip
         assert section in text
-    assert "M4 skipped" in text
+    # M4 (CNN) runs when the optional dl extra is installed, otherwise it is skipped with a note
+    try:
+        import torch  # noqa: F401
+
+        has_cnn = True
+    except ImportError:
+        has_cnn = False
+    if has_cnn:
+        assert any(
+            (k[0] if isinstance(k, tuple) else k.split("|")[0]) == "M4" for k in res["rows"]
+        ), "M4 should run when torch is installed"
+    else:
+        assert "M4 skipped" in text
     # every gate status carries the suffix; the fitted profile beats the prior on exercise accuracy
     for r in res["rows"].values():
         for g in r["gates"].values():
@@ -82,7 +94,9 @@ def test_in_sample_end_to_end(synth, tmp_path):
     parent = runs[runs["run_id"] == res["run_ids"]["parent"]].iloc[0]
     assert parent["tags.mode"] == "in-sample" and parent["tags.git.sha"]
     kids = runs[runs["tags.mlflow.parentRunId"] == res["run_ids"]["parent"]]
-    assert len(kids) == 2 * 2
+    assert len(kids) == len(
+        res["rows"]
+    )  # one child per model x profile that ran (M4 only with the dl extra)
     assert kids["tags.gate.set_accuracy"].str.contains("in-sample").all()
     arts = {a.path for a in mlflow.MlflowClient().list_artifacts(res["run_ids"]["parent"])}
     assert {"report.md", f"{calibrate.FITTED_PROFILE_ID}.yaml"} <= arts
