@@ -6,12 +6,12 @@
 ## Now
 - **Current phase:** Phase 3: calibration + domain shift (Phases 0–2 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Owner task U1 (calibration recording, ~20 min at home). In parallel, orchestrator writes the Phase 3 analysis spec (R fit, profile, domain-shift report). First GitHub run of `android-ci` once `dev` is pushed.
+- **Next step:** Orchestrator writes the Phase 3 analysis spec (eval harness, R fit from U2, Galaxy profile, domain-shift report). Then owner task U2 (two gym sessions).
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
 - [ ] Install a Wear OS system image + AVD in Android Studio (SDK Manager → SDK Platforms → Wear OS 5 or 6 image), **or** enable Wi-Fi debugging on the Galaxy Watch (Settings → Developer options). Needed only for the Phase 2 smoke test.
-- [ ] U1: calibration recording at home, left wrist, ~20 min (after Phase 2)
+- [x] U1: calibration recording (2026-10-23, 275 s, watch in hand). All checks pass; see `docs/reports/u1-calibration.md`
 - [ ] U2: two gym sessions × 20 sets, left wrist, with video if possible (after Phase 2)
 - [ ] U3: two friends × 10 sets, plus their consent forms (after Phase 2)
 - [ ] Install and smoke-test watch and phone builds (Phases 2, 5, 7)
@@ -64,7 +64,8 @@
 - [ ] [U] Optional, pre-launch: enable Always-on display so `ambient` (more battery-friendly) can be tested
 
 ### Phase 3: calibration + domain shift
-- [ ] [U] U1, U2 (×2), U3
+- [x] [U] U1 calibration: |a| 0.989 g, gyro bias 0.11 deg/s, all 6 poses on the expected axes, gyro signs and units confirmed; data in DVC (`data/raw/watch.dvc`)
+- [ ] [U] U2 (×2), U3
 - [ ] [S] Eval harness ‖ [S] DVC watch ingest
 - [ ] [O] Verify units/rates; fit R; write Galaxy Watch profile; freeze `watch-val-v1`; domain-shift report (bench/OHP confusion as its own line item)
 
@@ -95,6 +96,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-23: Pushed `dev`; first `android-ci` and `ml-ci` runs on GitHub both green. U1 recorded and analyzed: Android frame, units and gyro handedness confirmed on the real watch.
 - 2026-10-22: Phase 2 complete. P2c and P4 merged; remote launch verified on device; dimming removed at owner's request (D-025).
 - 2026-10-22: Freecess solved by keeping the dimmed recording screen on (D-024), verified on the wrist. Health Services exercise, Ongoing Activity and ambient (with AOD off) did not prevent the freeze. U1–U3 unblocked once P2c lands.
 - 2026-10-22: First real-device tests. Fixed the Data Layer: both apps now share `applicationId` dev.proprio (D-022). Recording works, but Samsung Freecess freezes the watch app (D-023); allow-listing didn't help and was reverted.
