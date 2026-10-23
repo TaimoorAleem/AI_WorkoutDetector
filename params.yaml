@@ -1,0 +1,8 @@
+# Parameters for the Phase 3 watch evaluation stages (dvc.yaml; spec phase3-domain-shift.md 3.5).
+watch:
+  datasets:
+    calib: watch-calib-v1
+    fit: watch-fit-v1
+    eval: watch-val-v1
+  tau_default: 0.6   # used when the fit set has no lift sets; otherwise tau is chosen on the fit set
+  models: "M1,M2,M3,M4"   # M4 (CNN) is skipped cleanly when workout_ml.models.cnn is absent
