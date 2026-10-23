@@ -2,8 +2,8 @@
 
 # Proprio
 
-[![ml-ci](https://github.com/TaimoorAleem/AI_WorkoutDetector/actions/workflows/ml-ci.yml/badge.svg?branch=dev)](https://github.com/TaimoorAleem/AI_WorkoutDetector/actions/workflows/ml-ci.yml)
-[![android-ci](https://github.com/TaimoorAleem/AI_WorkoutDetector/actions/workflows/android-ci.yml/badge.svg?branch=dev)](https://github.com/TaimoorAleem/AI_WorkoutDetector/actions/workflows/android-ci.yml)
+[![ml-ci](https://github.com/TaimoorAleem/Proprio/actions/workflows/ml-ci.yml/badge.svg?branch=dev)](https://github.com/TaimoorAleem/Proprio/actions/workflows/ml-ci.yml)
+[![android-ci](https://github.com/TaimoorAleem/Proprio/actions/workflows/android-ci.yml/badge.svg?branch=dev)](https://github.com/TaimoorAleem/Proprio/actions/workflows/android-ci.yml)
 
 **Proprio recognizes barbell exercises and counts reps from a smartwatch on your wrist.** You lift with a Galaxy Watch on; the watch records motion, the phone logs your sets, a backend classifies each set, and an LLM coach explains your training.
 
