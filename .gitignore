@@ -103,3 +103,14 @@ mlartifacts/
 
 # MLflow tracking database (default local backend)
 mlflow.db
+
+# Android / Gradle
+apps/android/.gradle/
+apps/android/.kotlin/
+build/
+local.properties
+.idea/
+*.iml
+
+# Schemas are copied into the package at build time (see ml/setup.py)
+ml/workout_ml/sensors/schemas/

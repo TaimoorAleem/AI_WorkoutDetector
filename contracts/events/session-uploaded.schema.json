@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proprio.dev/contracts/events/session-uploaded/1",
+  "title": "session.uploaded",
+  "description": "Published by core-api on exchange proprio.events (routing key session.uploaded) after a raw session zip is stored. Consumed by inference-svc.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "occurred_at", "session_id", "user_id", "object_key", "sha256", "size_bytes", "raw_format", "kind", "device_model"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "format": "uuid", "description": "Unique per event; consumers dedupe on it" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "session_id": { "type": "string", "format": "uuid" },
+    "user_id": { "type": "string", "format": "uuid" },
+    "object_key": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "size_bytes": { "type": "integer", "minimum": 1 },
+    "raw_format": { "const": 1 },
+    "kind": { "enum": ["gym", "calibration"] },
+    "device_model": { "type": "string", "maxLength": 64 },
+    "training_consent": { "type": "boolean", "description": "Copied from the user's consent at upload time" }
+  }
+}

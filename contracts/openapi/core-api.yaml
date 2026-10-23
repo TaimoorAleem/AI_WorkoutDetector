@@ -1,0 +1,553 @@
+openapi: 3.1.0
+info:
+  title: Proprio core-api
+  version: 1.0.0
+  description: |
+    Public REST API of Proprio's core service (docs/specs/phase5-services.md).
+    Contract-first: this file is the source of truth; the Spring Boot service implements it and the
+    phone app's client is generated from it. All endpoints except /v1/auth/* and /health require a
+    Bearer access token. Every resource is scoped to the authenticated user; another user's id
+    returns 404 (never 403), so ids can't be probed.
+servers:
+  - url: http://localhost:8080
+    description: local docker-compose
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      operationId: health
+      security: []
+      tags: [ops]
+      responses:
+        "200":
+          description: Liveness plus dependency status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /v1/auth/register:
+    post:
+      operationId: register
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "201":
+          description: Account created; returns tokens
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/auth/login:
+    post:
+      operationId: login
+      security: []
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Tokens
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /v1/auth/refresh:
+    post:
+      operationId: refresh
+      security: []
+      tags: [auth]
+      description: Rotates the refresh token. Reusing an already-rotated token revokes the whole token family.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: New tokens
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "204": { description: Refresh token family revoked }
+
+  /v1/me:
+    get:
+      operationId: getMe
+      tags: [account]
+      responses:
+        "200":
+          description: The current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    delete:
+      operationId: deleteMe
+      tags: [account]
+      description: Deletes the account, all sessions, labels, predictions and stored raw files. Irreversible.
+      responses:
+        "202": { description: Deletion accepted (raw-object deletion completes asynchronously) }
+
+  /v1/me/consent:
+    put:
+      operationId: setConsent
+      tags: [account]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsentUpdate" }
+      responses:
+        "200":
+          description: Current consent (history is kept server-side)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Consent" }
+
+  /v1/me/export:
+    get:
+      operationId: exportMyData
+      tags: [account]
+      responses:
+        "200":
+          description: All of the user's data as JSON, with presigned download URLs for raw sessions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataExport" }
+
+  /v1/sessions:
+    post:
+      operationId: createSession
+      tags: [sessions]
+      description: |
+        Registers a watch session before upload and returns a presigned PUT URL for the Raw Format v1 zip.
+        Idempotent per session_id for the same user (re-creating returns a fresh URL while status is CREATED).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSessionRequest" }
+      responses:
+        "201":
+          description: Session registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadTicket" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Sessions, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionPage" }
+
+  /v1/sessions/{sessionId}:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    get:
+      operationId: getSession
+      tags: [sessions]
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/sessions/{sessionId}/complete:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    post:
+      operationId: completeUpload
+      tags: [sessions]
+      description: |
+        Called after the PUT succeeds. The server checks the object exists and its size matches, sets
+        status UPLOADED and publishes `session.uploaded`. The SHA-256 is verified by the inference worker.
+      responses:
+        "202":
+          description: Upload accepted; analysis queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422":
+          description: Object missing or size mismatch
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /v1/sessions/{sessionId}/labels:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    get:
+      operationId: getLabels
+      tags: [labels]
+      responses:
+        "200":
+          description: The current labels.json document (protocol/schema/labels.schema.json)
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LabelsDocument" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: putLabels
+      tags: [labels]
+      description: Replaces the labels document. Validated against labels.schema.json. Optimistic concurrency via If-Match.
+      parameters:
+        - { name: If-Match, in: header, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LabelsDocument" }
+      responses:
+        "200":
+          description: Stored
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LabelsDocument" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "412":
+          description: ETag mismatch
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /v1/sessions/{sessionId}/analysis:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    get:
+      operationId: getAnalysis
+      tags: [analysis]
+      responses:
+        "200":
+          description: Latest analysis, merged with the user's labels
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analysis" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/workouts:
+    get:
+      operationId: listWorkouts
+      tags: [history]
+      description: Logged sets across sessions (user labels take precedence over predictions).
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+        - { name: exercise, in: query, schema: { $ref: "#/components/schemas/Exercise" } }
+      responses:
+        "200":
+          description: Sets in the range
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LoggedSet" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    ValidationError:
+      description: Request failed validation
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Not found (or not yours)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflict:
+      description: Conflicts with current state
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    TooManyRequests:
+      description: Rate limited
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      description: RFC 9457 problem details
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        components:
+          type: object
+          additionalProperties: { type: string, enum: [UP, DOWN] }
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 12, maxLength: 128 }
+        participantId:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{1,32}$"
+          description: Pseudonymous id shown in recordings (e.g. P01)
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken, expiresIn, tokenType]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, description: Access-token lifetime in seconds }
+        tokenType: { type: string, enum: [Bearer] }
+
+    User:
+      type: object
+      required: [id, email, participantId, createdAt, consent]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        participantId: { type: string }
+        createdAt: { type: string, format: date-time }
+        consent: { $ref: "#/components/schemas/Consent" }
+
+    ConsentUpdate:
+      type: object
+      required: [trainingUse]
+      properties:
+        trainingUse: { type: boolean }
+
+    Consent:
+      type: object
+      required: [trainingUse, recordedAt]
+      properties:
+        trainingUse: { type: boolean, description: May the user's sessions be used to train models }
+        recordedAt: { type: string, format: date-time }
+
+    SessionKind:
+      type: string
+      enum: [gym, calibration]
+
+    SessionStatus:
+      type: string
+      enum: [CREATED, UPLOADED, ANALYZING, ANALYZED, FAILED]
+
+    Exercise:
+      type: string
+      enum: [bench, squat, dead, ohp, row]
+
+    CreateSessionRequest:
+      type: object
+      required: [sessionId, kind, sha256, sizeBytes, rawFormat, device, startedAt]
+      properties:
+        sessionId: { type: string, format: uuid, description: The watch-generated session id }
+        kind: { $ref: "#/components/schemas/SessionKind" }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        sizeBytes: { type: integer, minimum: 1, maximum: 52428800 }
+        rawFormat: { type: integer, enum: [1] }
+        startedAt: { type: string, format: date-time }
+        durationS: { type: number, minimum: 0 }
+        device:
+          type: object
+          required: [manufacturer, model]
+          properties:
+            manufacturer: { type: string, maxLength: 64 }
+            model: { type: string, maxLength: 64 }
+            sdkInt: { type: integer }
+
+    UploadTicket:
+      type: object
+      required: [session, uploadUrl, uploadMethod, uploadHeaders, expiresAt]
+      properties:
+        session: { $ref: "#/components/schemas/Session" }
+        uploadUrl: { type: string, format: uri }
+        uploadMethod: { type: string, enum: [PUT] }
+        uploadHeaders:
+          type: object
+          additionalProperties: { type: string }
+          description: Headers the client must send with the PUT (e.g. Content-Type application/zip)
+        expiresAt: { type: string, format: date-time }
+
+    Session:
+      type: object
+      required: [sessionId, kind, status, startedAt, createdAt]
+      properties:
+        sessionId: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/SessionKind" }
+        status: { $ref: "#/components/schemas/SessionStatus" }
+        startedAt: { type: string, format: date-time }
+        durationS: { type: number }
+        deviceModel: { type: string }
+        createdAt: { type: string, format: date-time }
+        analyzedAt: { type: string, format: date-time }
+        failureReason: { type: string }
+
+    SessionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Session" }
+        nextCursor: { type: string }
+
+    LabelsDocument:
+      description: |
+        Raw Format v1 labels.json (protocol/schema/labels.schema.json is authoritative; the server
+        validates against it). Kept as a free-form object here to avoid two copies of the schema.
+      type: object
+      additionalProperties: true
+      required: [labels_format, session_id, segments]
+
+    SegmentAnalysis:
+      type: object
+      required: [segmentId, kind, startS, endS]
+      properties:
+        segmentId: { type: integer }
+        kind: { type: string, enum: [set, rest, other, calibration] }
+        startS: { type: number }
+        endS: { type: number }
+        predictedExercise: { $ref: "#/components/schemas/Exercise" }
+        predictedKind: { type: string, enum: [set, rest], description: Whether the model thinks this was a lift }
+        confidence: { type: number, minimum: 0, maximum: 1, description: Winning class vote share }
+        repCount: { type: integer, minimum: 0 }
+        userExercise: { $ref: "#/components/schemas/Exercise" }
+        userReps: { type: integer }
+        loadKg: { type: number }
+
+    Analysis:
+      type: object
+      required: [sessionId, status, segments]
+      properties:
+        sessionId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/SessionStatus" }
+        model:
+          type: object
+          properties:
+            name: { type: string }
+            version: { type: string }
+        profileId: { type: string }
+        transformId: { type: string }
+        segments:
+          type: array
+          items: { $ref: "#/components/schemas/SegmentAnalysis" }
+
+    LoggedSet:
+      type: object
+      required: [sessionId, segmentId, date, exercise, source]
+      properties:
+        sessionId: { type: string, format: uuid }
+        segmentId: { type: integer }
+        date: { type: string, format: date-time }
+        exercise: { $ref: "#/components/schemas/Exercise" }
+        reps: { type: integer }
+        loadKg: { type: number }
+        rpe: { type: number }
+        source: { type: string, enum: [user, model], description: Which source the exercise and reps came from }
+
+    DataExport:
+      type: object
+      required: [user, sessions]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        consentHistory:
+          type: array
+          items: { $ref: "#/components/schemas/Consent" }
+        sessions:
+          type: array
+          items:
+            type: object
+            properties:
+              session: { $ref: "#/components/schemas/Session" }
+              labels: { $ref: "#/components/schemas/LabelsDocument" }
+              analysis: { $ref: "#/components/schemas/Analysis" }
+              rawDownloadUrl: { type: string, format: uri }

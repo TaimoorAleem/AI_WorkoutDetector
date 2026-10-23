@@ -4,22 +4,27 @@
 > Scope and specs live in [`PROJECT.md`](PROJECT.md), decisions in [`DECISIONS.md`](DECISIONS.md).
 
 ## Now
-- **Current phase:** Phase 1: CSF-1 normalization layer (Phase 0 complete)
+- **Current phase:** Phase 3: calibration + domain shift (Phases 0–2 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Phase 1: orchestrator writes `docs/sensor_spec.md` (§6.2 table, CSF-1, profile schema, fake-watch generator and rotation-sensitivity test design). Then Sonnet tasks in parallel: `sensors/` + tests ‖ fake-watch generator + rotation sensitivity.
+- **Next step:** Before Sunday 2026-10-25 (owner's planned gym session = U2 session 1): orchestrator writes the U2 checklist and the Phase 3 analysis spec (eval harness, R fit, Galaxy profile, domain-shift report).
 
 ## Pending owner tasks
-- [ ] Confirm Android package id (default `dev.proprio`)
-- [ ] U1: calibration recording at home, left wrist, ~20 min (after Phase 2)
-- [ ] U2: two gym sessions × 20 sets, left wrist, with video if possible (after Phase 2)
+- [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
+- [ ] Install a Wear OS system image + AVD in Android Studio (SDK Manager → SDK Platforms → Wear OS 5 or 6 image), **or** enable Wi-Fi debugging on the Galaxy Watch (Settings → Developer options). Needed only for the Phase 2 smoke test.
+- [x] U1: calibration recording (2026-10-23, 275 s, watch in hand). All checks pass; see `docs/reports/u1-calibration.md`
+- [ ] U2: two gym sessions × 20 sets, left wrist, with video if possible. Session 1 planned Sunday 2026-10-25
 - [ ] U3: two friends × 10 sets, plus their consent forms (after Phase 2)
 - [ ] Install and smoke-test watch and phone builds (Phases 2, 5, 7)
 - [ ] Create IBM Cloud account; approve resources and secrets (Phase 7)
 
 ## Blockers / open questions
+- Resolved (D-024): Samsung Freecess. Keeping the recording screen on (dimmed) keeps the process TOP; verified on the wrist with 0 gaps.
+- Resolved: watch-started sets now ask the phone user to confirm the exercise.
+- Resolved (P2c): watch tap debounce (1 s), discard prompt for segments < 3 s (note `"discarded"`, skipped by the Python reader), unconfirmed labels marked in Review.
+- Resolved (P2c): a phone-started session now opens the watch app remotely (`RemoteActivityHelper`) and starts it from the foreground. Verified on device with the watch app closed.
 - Rep counter fails every §6.5 rep gate on its own (training) data after cleaning: MAE 1.05, exact 40%, ±1 81%, OHP MAE 1.90. Optimistic (cutoffs tuned on this data; expected reps assumed). Phase 4 rework is mandatory.
-- Classifier is orientation-dependent (temporal stats on raw axes); bench/OHP differ by ~0.13 g on x only. Phase 1 rotation-sensitivity test decides whether robust features are needed before watch data.
-- CI not yet exercised on GitHub (nothing pushed; owner decides when to push).
+- Resolved (D-018): the baseline tolerated only 2° of misalignment; rotation augmentation (≤30°, K=8) raises it to 10°. Now the default training regime (A1).
+- Resolved (D-021): temporal/KNN with augmentation tolerates 15° (NN 10°), and is the production candidate. RF scores 0° only because one set flips at 2°; the 2 pp set-accuracy limit is finer than one set in a small fold.
 
 ## Phase checklists
 
@@ -34,30 +39,46 @@
 - [x] [O] 0.5 Review: `docs/reports/phase0-baseline-review.md`. Honest baseline: NN on temporal features, LOPO window acc 0.963±0.047, macro-F1 0.957±0.054, set acc 0.963±0.052 (was 0.9994 with leaks). Found 23 duplicate raw files (D-016).
 
 ### Phase 1: CSF-1 normalization layer
-- [ ] [O] `docs/sensor_spec.md` (the §6.2 table, CSF-1, profile schema)
-- [ ] [S] `sensors/` + tests ‖ [S] synthetic fake-watch generator + round-trip test
-- [ ] [S] Rotation-sensitivity test: best model's set accuracy and bench/OHP confusion vs rotation error (2°, 5°, 10°, 20° per axis); [O] decide on robust features
-- [ ] [S] Rewire pipeline onto CSF; regression test vs legacy loader
+- [x] [O] `docs/sensor_spec.md`: CSF-1, conversion steps, profiles, fake-watch generator, tests, analyses, decision rule
+- [x] [S] S1 `sensors/` package (`to_csf`, `from_canonical`, `load_profile`, `read_metamotion`), 2 device profiles, 106 tests; pipeline rewired; real-data output bit-identical to legacy loader, leaderboard unchanged
+- [x] [S] S2a ‖ Rotation sensitivity (§7.2): baseline θ_tol 2°, R1 30° (fails macro-F1 gate), R2 5°, R2w 10°, R2w8 10°
+- [x] [S] S2b Fake-watch generator `simulate_android` + tests; model-level round trip passes (set acc Δ 0.00 pp, macro-F1 Δ −0.27 pp, bench↔OHP +4.5%)
+- [x] [O] §7.3 decision (D-018): adopt rotation augmentation R2w8; residual gate stays 0.15 g; rule amended. Review: `docs/reports/phase1-review.md`
+- [ ] [S] Wire rotation augmentation into the default training pipeline (MLflow-logged), re-baseline
 
 ### Phase 2: Wear OS + phone recorder
-- [ ] [O] `:protocol` (Raw Format v1, meta.json schema, Data Layer messages)
-- [ ] [S] `:wear` ‖ [S] `:mobile`
-- [ ] [S] JUnit writer/parser tests; Python Raw v1 reader with golden files
-- [ ] [U] Install and smoke test
+- [x] [O] Spec: `docs/specs/phase2-recorder.md` (continuous sessions + segments, Raw Format v1, schemas, golden files, Data Layer paths)
+- [x] [S] P1 Gradle 9.8 / AGP 9.4 / Kotlin 2.4 project; `:protocol` (writer, reader, zip, resolver, stats), JSON Schemas, deterministic golden sessions, Python reader + CLI; 24 Kotlin + 22 Python tests
+- [x] [O] Data Layer contract in `:protocol` (`DataLayer.kt`: paths, capabilities, payloads)
+- [x] [S] A1 Rotation augmentation default (`workout_ml/augment.py`); `--no-augment` reproduces Phase 0 exactly; augmented NN matches R2w8; new best temporal/KNN 0.966 / 0.959 / 0.986; runtime 20 min (7 min without)
+- [x] [S] Rotation sensitivity for KNN and RF: KNN/R2w8 θ_tol 15°, RF/R2w8 0° (single-set artifact), KNN/baseline 5°, RF/baseline 0°
+- [x] [S] P2 `:wear` (46 JVM tests; explicit LSM6DSO sensor selection; hash-verified transfer; orphan recovery) ‖ [x] [S] P3 `:mobile` (29 tests; labels bound to watch segment ids in either arrival order; review + export)
+- [x] [O] Both apps installed on the owner's Galaxy Watch5 Pro (SM-R920, Wear OS 5 / API 34, LSM6DSO IMU) and Galaxy S25 Ultra (Android 17 / API 37)
+- [ ] [S] P4 `android-ci.yml`
+- [x] [U] First device smoke test: transfer, hash ack and label binding work end to end. Watch timing: 49.8 Hz, p50 20.08 ms, p99 20.11 ms (≈0.03 ms jitter), acc-gyr offset 0–20 ms, drift < 1 ms; LSM6DSO sensors selected; accelerometer range ±8 g
+- [x] [S] P2b Debug adb test hook, anti-freeze strategies (ongoing, ambient, exercise, screen_on), watch-started set exercise prompt. Device matrix: only `screen_on` works (0 gaps, process TOP)
+- [x] [U] Wrist test with `screen_on`: 289.7 s, 49.85 Hz, 0 gaps > 100 ms, max 20.2 ms, 0 freezes during session; squat label confirmed correctly
+- [x] [S] P2c UX fixes + black recording screen + remote watch launch; device test: remote start works, 0 gaps over 148 s, discard recorded
+- [x] [O] Readable recording screen: removed the 0.01 brightness override and dim text (owner: barely readable); battery tuning deferred to pre-launch (D-025)
+- [x] [S] P4 `android-ci.yml` (tests, both APKs, lint 0 errors), verified in a Linux Android-SDK container; `gradlew` made executable; not yet run on GitHub
+- [ ] [U] Optional, pre-launch: enable Always-on display so `ambient` (more battery-friendly) can be tested
 
 ### Phase 3: calibration + domain shift
-- [ ] [U] U1, U2 (×2), U3
-- [ ] [S] Eval harness ‖ [S] DVC watch ingest
+- [x] [U] U1 calibration: |a| 0.989 g, gyro bias 0.11 deg/s, all 6 poses on the expected axes, gyro signs and units confirmed; data in DVC (`data/raw/watch.dvc`)
+- [ ] [U] U2 (×2), U3
+- [x] [O] Phase 3 spec `docs/specs/phase3-domain-shift.md`; owner checklist `docs/U2_CHECKLIST.md`
+- [ ] [S] H1 eval harness (`workout_ml.watch`: ingest, calibration_check, Kabsch R fit, gates, report, DVC stages)
 - [ ] [O] Verify units/rates; fit R; write Galaxy Watch profile; freeze `watch-val-v1`; domain-shift report (bench/OHP confusion as its own line item)
 
 ### Phase 4: remediation + PyTorch
 - [ ] [O] Choose a branch of the decision tree
-- [ ] [S] Robust features ‖ [S] 1D-CNN → ONNX ‖ [S] rep-counter rework (mandatory) ‖ evaluate dropping FFT features
+- [ ] [S] C1 PyTorch 1D-CNN (LOPO, on-the-fly rotation augmentation, MLflow, ONNX parity) — started early, in parallel with H1
+- [ ] [S] Robust features ‖ [S] rep-counter rework (mandatory) ‖ evaluate dropping FFT features
 - [ ] [S] DVC pipeline + `model-regression` CI job
 - [ ] [O] Select production model; model card
 
 ### Phase 5: services MVP
-- [ ] [O] OpenAPI contract, DB schema, AMQP schemas
+- [x] [O] Spec `docs/specs/phase5-services.md`; contracts: `contracts/openapi/core-api.yaml` (17 operations), `contracts/events/session-{uploaded,analyzed}.schema.json`; DB schema in the spec
 - [ ] [S] core-api ‖ [S] inference-svc ‖ [S] compose + UBI Dockerfiles
 - [ ] [S] Phone upload/results/history/corrections + UI tests
 - [ ] [S] REST Assured E2E
@@ -77,6 +98,18 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-23: Phase 3 spec + U2 checklist written; H1 (harness) and C1 (CNN) started in parallel; Phase 5 spec and contracts written, V1 (core-api) started.
+- 2026-10-23: Added `docs/BUILD_JOURNAL.md` (full journey, blog-series structure) at the owner's request; added to the session ritual. U2 session 1 planned for Sunday 2026-10-25.
+- 2026-10-23: Pushed `dev`; first `android-ci` and `ml-ci` runs on GitHub both green. U1 recorded and analyzed: Android frame, units and gyro handedness confirmed on the real watch.
+- 2026-10-22: Phase 2 complete. P2c and P4 merged; remote launch verified on device; dimming removed at owner's request (D-025).
+- 2026-10-22: Freecess solved by keeping the dimmed recording screen on (D-024), verified on the wrist. Health Services exercise, Ongoing Activity and ambient (with AOD off) did not prevent the freeze. U1–U3 unblocked once P2c lands.
+- 2026-10-22: First real-device tests. Fixed the Data Layer: both apps now share `applicationId` dev.proprio (D-022). Recording works, but Samsung Freecess freezes the watch app (D-023); allow-listing didn't help and was reverted.
+- 2026-10-22: P2, P3 and the KNN/RF sensitivity follow-up merged. Watch and phone paired over adb Wi-Fi; both apps installed; first end-to-end smoke test in progress.
+- 2026-10-22: P1, Data Layer contract and A1 merged. All three Sonnet agents hit the usage limit at once and resumed after the 2:10 pm reset (work was saved in worktrees). A1 found that `rotation_sensitivity.py` had been broken on `dev` since S1 removed the old loader methods; its tests didn't exercise that path.
+- 2026-10-22: Phase 2 spec written. Android SDK present (platforms 30–36.1, JBR 21, phone AVD); no Wear OS image or cmdline-tools yet. Owner AFK with watch off; device steps deferred.
+- 2026-10-22: Phase 1 complete. S2b and S2a merged; R2w/R2w8 follow-up run; D-018 recorded; Phase 1 review written.
+- 2026-10-22: S1 merged. Spec corrected (anti-alias attenuation: ≥14 dB at 6 Hz, ≥20 dB at 7 Hz). Resampled row count is 8180 (82 sets, 7360 windows after trimming).
+- 2026-10-22: Pushed `dev`; first GitHub CI run green. Owner approved merging `dev` → `main` (fast-forward to `f8b4e77`) and pushing. Phase 1 spec written (`docs/sensor_spec.md`).
 - 2026-10-22: Phase 0 complete. 0.4b merged; clean rerun on `dev` reproduced metrics exactly (MLflow parent `f5231a5df0974e1e94a80b04f2cfe6b6`). Orchestrator review written; D-016 (duplicate raw files); PROJECT.md §6.1 corrected; Phase 1 gains a rotation-sensitivity test.
 - 2026-10-22: 0.2 (rep counter library) and 0.3 (CI + cross-platform locks) merged into `dev`; 0.4 spec written.
 - 2026-10-22: 0.1 merged into `dev`. Leaky baseline (random 80/20 row split, `duration` feature): best = decision tree on 10 selected features, accuracy 0.9994 / F1 0.9994. This number is NOT trustworthy; 0.4 replaces it with LOPO. Runtime ~35 min, dominated by forward selection (~25 min).

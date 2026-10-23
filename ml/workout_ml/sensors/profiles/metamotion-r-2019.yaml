@@ -1,0 +1,10 @@
+profile_id: metamotion-r-2019        # never reuse an id for different numbers
+csf_version: 1
+device: {vendor: MbientLab, model: MetaMotionR, firmware: "1.4.4", platform: metawear}
+acc: {source_unit: "g",     unit_scale: 1.0}
+gyr: {source_unit: "deg/s", unit_scale: 1.0}
+rotation: [[1,0,0],[0,1,0],[0,0,1]]  # canonical = R @ device
+rotation_status: identity            # identity | prior | fitted
+emulation: {enabled: false}
+clip: {acc_g: null}
+calibration: null

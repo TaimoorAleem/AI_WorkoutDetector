@@ -1,0 +1,82 @@
+name: android-ci
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - "apps/android/**"
+      - "protocol/**"
+      - ".github/workflows/android-ci.yml"
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - "apps/android/**"
+      - "protocol/**"
+      - ".github/workflows/android-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The runner image ships an Android SDK; make sure compileSdk 36 is present.
+      - name: Install Android SDK platform 36
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # :protocol:test includes GoldenTest, which regenerates the golden sessions and
+      # compares them with the committed files in protocol/golden (the golden-file guard).
+      - name: Test, build and lint
+        run: >
+          ./gradlew --no-daemon
+          :protocol:test :wear:testDebugUnitTest :mobile:testDebugUnitTest
+          :wear:assembleDebug :mobile:assembleDebug
+          :wear:lintDebug :mobile:lintDebug
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: apps/android/*/build/reports/tests/
+          if-no-files-found: ignore
+
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-reports
+          path: apps/android/*/build/reports/lint-results-*.*
+          if-no-files-found: ignore
+
+      - name: Upload debug APKs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apks
+          path: apps/android/*/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
