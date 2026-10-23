@@ -92,7 +92,9 @@ def test_val_participant_never_sole_holder_of_a_class():
     # E is the only holder of "rest" in the pool and has the most classes; it must not be val
     parts = np.array(["B"] * 3 + ["C"] * 4 + ["E"] * 5)
     labels = np.array(
-        ["bench"] * 3 + ["bench", "squat", "squat", "ohp"] + ["bench", "squat", "ohp", "rest", "rest"]
+        ["bench"] * 3
+        + ["bench", "squat", "squat", "ohp"]
+        + ["bench", "squat", "ohp", "rest", "rest"]
     )
     assert cnn.choose_val_participant(parts, labels) == "C"
 
