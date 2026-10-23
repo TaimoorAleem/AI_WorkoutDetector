@@ -3,7 +3,7 @@
 > The full story of building Proprio, in order. It's raw material for a multi-part blog series after launch.
 > Every entry covers: **what I did, why, what I rejected, what happened (with numbers), and what I learned.**
 > Numbers come from reproducible runs. Evidence lives in `docs/reports/`, MLflow and git history.
-> Kept current alongside [`PROGRESS.md`](PROGRESS.md) (state) and [`DECISIONS.md`](DECISIONS.md) (decision log). [`INTERVIEW_NOTES.md`](INTERVIEW_NOTES.md) holds the short talking points.
+> Kept current alongside [`PROGRESS.md`](PROGRESS.md) (state) and [`DECISIONS.md`](DECISIONS.md) (decision log).
 
 ## Series outline
 | Part | Working title | Covers | Status |
@@ -268,6 +268,55 @@ I misread one rotation step and did mostly the wrong axis. Instead of re-recordi
 - Before throwing away imperfect data, check whether it still answers the question.
 
 ---
+
+## Part 7 (in progress) — Getting ready for real gym data (2026-10-23)
+
+### What I did before the first gym session
+- **Wrote the evaluation criteria before collecting the data.** The Phase 3 spec defines:
+  - how a watch session becomes a verdict;
+  - how the watch-to-training axis rotation is fitted (weighted Kabsch on per-exercise gravity vectors, determinant constrained, with a mirror check that would flag a wrong-wrist assumption);
+  - the pass/fail gates with Wilson confidence intervals;
+  - a "not a lift" threshold tuned only on session 1;
+  - an explicitly labeled in-sample mode for a first look the same evening.
+- **Built the harness** (`workout_ml.watch`). It recovered a known synthetic rotation within 0.07°, and it reproduces the U1 calibration numbers exactly.
+- **The spec was wrong once, and the implementer caught it.** I'd specified a "smallest singular value" conditioning warning, but real gravity data legitimately has one small singular value (0.30). It was replaced with a physically meaningful "weakest-axis lever" check.
+- **Wrote a printable gym protocol:**
+  - 20 sets per session in exercise blocks, with the order swapped in session 2;
+  - five "other" periods for negative examples;
+  - reps counted aloud.
+- **Versioned the calibration data in DVC** as `watch-calib-v1`.
+
+## Part 8 (started early) — A PyTorch model that ties the classical best (2026-10-23)
+- **The model:** a small 1D-CNN (three conv blocks, about 4 s windows of 8 channels).
+- **Training:** each sample gets a new random rotation every epoch (on-the-fly augmentation), with early stopping on a held-out *participant*, never a random split.
+- **LOPO result:** set accuracy **0.986 ± 0.032**, macro-F1 0.959. That ties the augmented KNN; the fold std (about 0.05) says the two are indistinguishable on this data.
+- **A subtle bug, caught before reporting:** the first early-stopping rule sometimes held out the only other participant with `rest` data, so the model never saw that class (macro-F1 fell to 0.83). The fix: the validation participant may never be the sole holder of a class.
+- **ONNX export:** matches PyTorch to 1.3e-6. Preprocessing (channel order, normalization, classes) ships as JSON next to the model, so serving doesn't need PyTorch.
+- **Kept CI light:** PyTorch lives in an optional extra with its own CPU-only lock, and tests skip cleanly without it.
+- **An honest comparison caveat:** the CNN can't predict the first 4 s of a set, so window-level metrics cover fewer windows than the classical models. Set-level numbers are the fair comparison.
+
+## Part 9 (started) — The first service: contract-first Spring Boot (2026-10-23)
+- **Contracts first,** written by me before any service code:
+  - an OpenAPI spec (17 operations);
+  - JSON Schemas for the two RabbitMQ events (`session.uploaded`, `session.analyzed`);
+  - the database design.
+
+  Two services in two languages build against them.
+- **core-api design:**
+  - phone → presigned upload straight to object storage → a "complete" call → a **transactional outbox**, so a crash can't lose or duplicate the upload event;
+  - Argon2id passwords, with a dummy-hash comparison so login timing doesn't reveal which emails exist;
+  - RS256 access tokens plus **rotating refresh tokens with reuse detection**;
+  - RFC 9457 errors;
+  - another user's data returns **404**, proven with IDOR tests.
+- **Tests:** 61, 35 of them against real PostgreSQL, RabbitMQ and MinIO via Testcontainers. The image is built on Red Hat UBI, runs as non-root, and starts healthy.
+- **A real-world snag:** the `minio/minio` image had disappeared from Docker Hub, and the anonymous-pull alternative needed different permissions.
+
+## Housekeeping worth telling
+- **Renamed the GitHub repo to Proprio** and rewrote the README around the product.
+- **Made the interview notes private.** That meant learning the hard way that `.gitignore` doesn't untrack a committed file.
+  - I purged it from history in a separate clone, so in-progress work wasn't disturbed.
+  - I verified the rewritten branch tips matched the originals except for the file.
+  - I force-pushed with leases. The lease caught a concurrent README edit, which was checked before anything was overwritten.
 
 ## Upcoming parts (to be written as they happen)
 - **Part 7:** U2 gym sessions, fitting the watch-to-training rotation (Kabsch on per-exercise gravity vectors), and the domain-shift report against the pre-set gates, with bench/OHP as the canary.
