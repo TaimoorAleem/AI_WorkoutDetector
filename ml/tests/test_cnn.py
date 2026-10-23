@@ -97,6 +97,19 @@ def test_val_participant_never_sole_holder_of_a_class():
     assert cnn.choose_val_participant(parts, labels) == "C"
 
 
+def test_watch_predictor_on_foreign_frame():
+    train = synthetic_df(n_bins=30)
+    pred = cnn.train_watch_predictor(train, seed=1)
+    watch = synthetic_df(n_bins=25, participants="W", seed=5).assign(
+        label="other", session_id="s1", kind="x"
+    )
+    out = pred.predict_windows(watch.drop(columns=["participant"]))
+    assert {"set", "pred", "proba_bench", "proba_squat"} <= set(out.columns)
+    assert len(out) == watch["set"].nunique() * (25 - 20 + 1)
+    assert set(out["pred"]) <= {"bench", "squat"}
+    assert np.allclose(out[["proba_bench", "proba_squat"]].sum(axis=1), 1, atol=1e-5)
+
+
 def test_onnx_parity(tmp_path):
     torch.manual_seed(0)
     m = cnn.make_model(cnn.CnnConfig(), 6)

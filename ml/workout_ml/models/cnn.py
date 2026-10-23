@@ -372,6 +372,52 @@ def train_final(df, classes, cfg, *, augment):
     return model, norm, hist, val_p
 
 
+# --------------------------------------------------------------------------- watch predictor
+class WatchPredictor:
+    """Trained CNN + preprocessing; predicts windows of any cleaned CSF frame."""
+
+    def __init__(self, model, norm, classes, cfg):
+        self.model, self.norm, self.classes, self.cfg = model, norm, list(classes), cfg
+
+    def predict_windows(self, cleaned_df):
+        """One row per window (predicting its last bin); windows never cross sets.
+
+        Needs only the six sensor columns and ``set``; labels and other columns are ignored.
+        Returns columns ``set``, ``end_pos`` (bin position within the set), ``time`` (index
+        value of the window's last bin), ``pred`` and ``proba_<class>``.
+        """
+        W = self.cfg.window
+        xs, meta = [], []
+        for set_id, g in cleaned_df.groupby("set", sort=True):
+            arr = g[RAW_COLUMNS].to_numpy(dtype=np.float32)
+            if len(arr) < W:
+                continue
+            w = np.lib.stride_tricks.sliding_window_view(arr, W, axis=0)
+            xs.append(np.ascontiguousarray(w.transpose(0, 2, 1)))
+            idx = g.index.to_numpy()
+            meta.append(pd.DataFrame({"set": set_id, "end_pos": np.arange(len(w)) + W - 1,
+                                      "time": idx[W - 1 :]}))  # fmt: skip
+        cols = ["set", "end_pos", "time", "pred", *[f"proba_{c}" for c in self.classes]]
+        if not xs:
+            return pd.DataFrame(columns=cols)
+        x = np.concatenate(xs)
+        pred_idx, logits = predict(self.model, x, self.norm)
+        proba = torch.softmax(logits, dim=1).numpy()
+        out = pd.concat(meta, ignore_index=True)
+        out["pred"] = np.asarray(self.classes)[pred_idx]
+        for i, c in enumerate(self.classes):
+            out[f"proba_{c}"] = proba[:, i]
+        return out
+
+
+def train_watch_predictor(cleaned_mm_df, seed=42):
+    """Train on ALL MetaMotion data (rotation augmentation, deterministic inner-val participant)."""
+    cfg = CnnConfig(seed=seed)
+    classes = sorted(cleaned_mm_df["label"].unique())
+    model, norm, _, _ = train_final(cleaned_mm_df, classes, cfg, augment=True)
+    return WatchPredictor(model, norm, classes, cfg)
+
+
 # --------------------------------------------------------------------------- ONNX
 def export_onnx(model, path, window, n_channels=len(CHANNELS)):
     """Export with a dynamic batch dimension. Input ``input`` (B, 8, W), output ``logits``."""
