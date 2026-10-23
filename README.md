@@ -5,9 +5,9 @@
 [![ml-ci](https://github.com/TaimoorAleem/Proprio/actions/workflows/ml-ci.yml/badge.svg?branch=dev)](https://github.com/TaimoorAleem/Proprio/actions/workflows/ml-ci.yml)
 [![android-ci](https://github.com/TaimoorAleem/Proprio/actions/workflows/android-ci.yml/badge.svg?branch=dev)](https://github.com/TaimoorAleem/Proprio/actions/workflows/android-ci.yml)
 
-**Proprio, short for Proprioception, recognizes barbell exercises and counts reps from a smartwatch on your wrist.** You lift with a Galaxy Watch on; the watch records motion, the phone logs your sets, a backend classifies each set, and an LLM coach explains your training.
+**Proprio, short for Proprioception, recognizes barbell exercises and counts reps from a smartwatch on your wrist.** You lift with a smartwatch on; the watch records motion, the phone logs your sets, a backend classifies each set, and an LLM coach explains your training.
 
-It started as **AI Workout Detector**, a 2019 research proof of concept: one MetaMotion wrist sensor, five people, five lifts. It's being rebuilt into a real product, where every technology has a real job, every number comes from leakage-free evaluation, and every decision is written down.
+It started as **AI Workout Detector**, a 2019 research proof of concept: one MetaMotion wrist sensor, five people, five lifts.
 
 > **Status (Oct 2026):** Phases 0–2 are done, Phase 3 (real-watch validation) is in progress, and the services are being built. See [Roadmap](#roadmap).
 
