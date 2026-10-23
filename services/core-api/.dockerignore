@@ -1,0 +1,6 @@
+# Used when building from inside services/core-api (docker build .). Note that such a build lacks the
+# contract and schemas, so the supported command is the repo-root build in the Dockerfile header.
+build
+.gradle
+.env
+*.pem

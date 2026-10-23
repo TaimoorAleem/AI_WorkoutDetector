@@ -1,0 +1,15 @@
+# Local development against the compose stack (postgres, rabbitmq, minio).
+# Secrets (DB_PASSWORD, RABBIT_PASSWORD, S3_ACCESS_KEY, S3_SECRET_KEY) come from the environment; see .env.example.
+# With no JWT key configured, an ephemeral RS256 key pair is generated at startup (dev/test profiles only).
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+proprio:
+  storage:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    create-bucket-on-start: true
+logging:
+  level:
+    dev.proprio: DEBUG
