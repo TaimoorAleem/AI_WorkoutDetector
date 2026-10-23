@@ -6,7 +6,7 @@ This repo is evolving the AI Workout Detector proof of concept (barbell exercise
 - **`docs/PROJECT.md`**: the **source of truth** for scope, features, architecture, sensor spec, gates and phases. Don't change scope without the owner's approval.
 - **`docs/PROGRESS.md`**: current phase, next step, checklists, pending owner tasks, session log.
 - **`docs/DECISIONS.md`**: append-only decision log, with the reasoning behind each decision.
-- **`docs/INTERVIEW_NOTES.md`**: the owner's interview talking points (STAR stories, decisions, numbers, likely questions). Keep it current.
+- **`docs/INTERVIEW_NOTES.md`**: the owner's interview talking points (STAR stories, decisions, numbers, likely questions). Keep it current. **Private: gitignored and purged from history (D-026). Never commit or push it, never `git add -f` it, and copy it aside before branch switches or merges.**
 - **`docs/BUILD_JOURNAL.md`**: the full chronological story of building Proprio, organized as parts of a future blog series (what was done, why, what was rejected, results, lessons). Keep it current.
 
 ## Session ritual
