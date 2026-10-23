@@ -1,0 +1,6 @@
+outs:
+- md5: 6c2e2e18c0a76b43c9262fb9d8df9769.dir
+  size: 352139
+  nfiles: 1
+  hash: md5
+  path: watch
