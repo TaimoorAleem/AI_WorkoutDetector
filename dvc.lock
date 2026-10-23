@@ -1,0 +1,109 @@
+schema: '2.0'
+stages:
+  calibration_check:
+    cmd: python -m workout_ml.watch.ingest --calibration-check watch-calib-v1 
+      --out results/metrics/watch_calibration.json
+    deps:
+    - path: data/raw/watch
+      hash: md5
+      md5: 6c2e2e18c0a76b43c9262fb9d8df9769.dir
+      size: 352139
+      nfiles: 1
+    - path: data/watch_datasets.yaml
+      hash: md5
+      md5: 1b4cee7ba1863a4e9d9650d6212a11ec
+      size: 631
+    - path: ml/workout_ml/sensors
+      hash: md5
+      md5: d1682ecaa733592f9edfa7e035d87503.dir
+      size: 67297
+      nfiles: 12
+    - path: ml/workout_ml/watch
+      hash: md5
+      md5: 29e167983904f9479a223317aa0b540a.dir
+      size: 79388
+      nfiles: 8
+    outs:
+    - path: results/metrics/watch_calibration.json
+      hash: md5
+      md5: 6475db2200440e6f2977b3ce944905be
+      size: 4734
+  fit_profile:
+    cmd: python -m workout_ml.watch.calibrate --fit watch-fit-v1 --out 
+      results/metrics/watch_fit.json
+    deps:
+    - path: data/raw/MetaMotion
+      hash: md5
+      md5: 45732a83275a4045dd1b7b5a8c229a14.dir
+      size: 4563677
+      nfiles: 187
+    - path: data/raw/watch
+      hash: md5
+      md5: 6c2e2e18c0a76b43c9262fb9d8df9769.dir
+      size: 352139
+      nfiles: 1
+    - path: data/watch_datasets.yaml
+      hash: md5
+      md5: 1b4cee7ba1863a4e9d9650d6212a11ec
+      size: 631
+    - path: ml/workout_ml/config.py
+      hash: md5
+      md5: ff0b8b5df3f408d2aa470414a4dc2e2a
+      size: 3390
+    - path: ml/workout_ml/data
+      hash: md5
+      md5: 4daea07802b36daacf9a9dcd97413813.dir
+      size: 9906
+      nfiles: 2
+    - path: ml/workout_ml/sensors
+      hash: md5
+      md5: d1682ecaa733592f9edfa7e035d87503.dir
+      size: 67297
+      nfiles: 12
+    - path: ml/workout_ml/watch
+      hash: md5
+      md5: 29e167983904f9479a223317aa0b540a.dir
+      size: 79388
+      nfiles: 8
+    outs:
+    - path: results/metrics/watch_fit.json
+      hash: md5
+      md5: 4e9d933b58ddb570d14ff411cef217a4
+      size: 71
+  evaluate:
+    cmd: python -m workout_ml.watch.evaluate --fit watch-fit-v1 --eval 
+      watch-val-v1 --models M1,M2,M3,M4 --tau-default 0.6 --calib watch-calib-v1
+      --metrics-out results/metrics/watch_eval.json
+    deps:
+    - path: data/raw/MetaMotion
+      hash: md5
+      md5: 45732a83275a4045dd1b7b5a8c229a14.dir
+      size: 4563677
+      nfiles: 187
+    - path: data/raw/watch
+      hash: md5
+      md5: 6c2e2e18c0a76b43c9262fb9d8df9769.dir
+      size: 352139
+      nfiles: 1
+    - path: data/watch_datasets.yaml
+      hash: md5
+      md5: 1b4cee7ba1863a4e9d9650d6212a11ec
+      size: 631
+    - path: ml/workout_ml
+      hash: md5
+      md5: 93e8a2e305c5d9aee8325bb60c8abf79.dir
+      size: 250614
+      nfiles: 41
+    - path: results/metrics/watch_calibration.json
+      hash: md5
+      md5: 6475db2200440e6f2977b3ce944905be
+      size: 4734
+    - path: results/metrics/watch_fit.json
+      hash: md5
+      md5: 4e9d933b58ddb570d14ff411cef217a4
+      size: 71
+    outs:
+    - path: results/metrics/watch_eval.json
+      hash: md5
+      md5: 6dd7c8623388e63e846b2176610559b8
+      size: 41
