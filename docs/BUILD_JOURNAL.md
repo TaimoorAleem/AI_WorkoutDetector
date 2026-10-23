@@ -311,6 +311,13 @@ I misread one rotation step and did mostly the wrong axis. Instead of re-recordi
 - **Tests:** 61, 35 of them against real PostgreSQL, RabbitMQ and MinIO via Testcontainers. The image is built on Red Hat UBI, runs as non-root, and starts healthy.
 - **A real-world snag:** the `minio/minio` image had disappeared from Docker Hub, and the anonymous-pull alternative needed different permissions.
 
+### The Python inference service (V2)
+- **No train/serve skew by construction:** the service doesn't re-implement inference. It calls `analyze_session`, the same function the Phase 3 verdict uses, and a test proves the two agree segment by segment.
+- **Failure design before happy path:** a permanent error (bad hash, bad zip, unknown watch, missing object) becomes a `failed` event straight away; anything else retries through 5 s / 15 s / 45 s delay queues and then lands in a dead-letter queue *and* emits `failed`, so the phone never waits forever.
+- **A RabbitMQ subtlety:** per-message expiry only applies at the head of a queue, so mixed delays in one queue would block each other. One queue per delay avoids it.
+- **Idempotent by design:** the result event's id is derived from the upload event's id, so a redelivered message produces an identical event that core-api ignores.
+- **Tests:** 36, four of them against real RabbitMQ and MinIO containers, including actual TTL retries ending in the DLQ. The UBI image starts healthy and reports the loaded model's version (git SHA + training-data hash).
+
 ## Housekeeping worth telling
 - **Renamed the GitHub repo to Proprio** and rewrote the README around the product.
 - **Made the interview notes private.** That meant learning the hard way that `.gitignore` doesn't untrack a committed file.
