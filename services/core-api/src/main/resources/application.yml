@@ -1,0 +1,102 @@
+spring:
+  application:
+    name: core-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/proprio}
+    username: ${DB_USER:proprio}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none # schema is owned by Flyway (citext etc. do not pass Hibernate validation)
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:proprio}
+    password: ${RABBIT_PASSWORD:}
+    virtual-host: ${RABBIT_VHOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+  health:
+    diskspace:
+      enabled: false
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+proprio:
+  jwt:
+    issuer: ${JWT_ISSUER:https://proprio.dev/core-api}
+    access-ttl: 15m
+    private-key: ${JWT_PRIVATE_KEY:} # PKCS#8 PEM (RSA); the public key is derived from it
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:}
+  auth:
+    refresh-ttl: 30d
+    argon2: # OWASP minimum for Argon2id: m=19 MiB, t=2, p=1
+      memory-kib: 19456
+      iterations: 2
+      parallelism: 1
+    rate-limit:
+      email-capacity: 5
+      email-refill-per-minute: 5
+      ip-capacity: 30
+      ip-refill-per-minute: 30
+  storage:
+    endpoint: ${S3_ENDPOINT:}
+    public-endpoint: ${S3_PUBLIC_ENDPOINT:}
+    region: ${S3_REGION:us-east-1}
+    bucket: ${S3_BUCKET:proprio-raw}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    path-style: ${S3_PATH_STYLE:true}
+    create-bucket-on-start: false
+  messaging:
+    exchange: proprio.events
+    analyzed-queue: core.session-analyzed
+  outbox:
+    poll-interval: 500ms
+    batch-size: 50
+  upload:
+    presign-ttl: 15m
+    max-size-bytes: 52428800
