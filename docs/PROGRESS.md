@@ -66,17 +66,19 @@
 ### Phase 3: calibration + domain shift
 - [x] [U] U1 calibration: |a| 0.989 g, gyro bias 0.11 deg/s, all 6 poses on the expected axes, gyro signs and units confirmed; data in DVC (`data/raw/watch.dvc`)
 - [ ] [U] U2 (×2), U3
-- [ ] [S] Eval harness ‖ [S] DVC watch ingest
+- [x] [O] Phase 3 spec `docs/specs/phase3-domain-shift.md`; owner checklist `docs/U2_CHECKLIST.md`
+- [ ] [S] H1 eval harness (`workout_ml.watch`: ingest, calibration_check, Kabsch R fit, gates, report, DVC stages)
 - [ ] [O] Verify units/rates; fit R; write Galaxy Watch profile; freeze `watch-val-v1`; domain-shift report (bench/OHP confusion as its own line item)
 
 ### Phase 4: remediation + PyTorch
 - [ ] [O] Choose a branch of the decision tree
-- [ ] [S] Robust features ‖ [S] 1D-CNN → ONNX ‖ [S] rep-counter rework (mandatory) ‖ evaluate dropping FFT features
+- [ ] [S] C1 PyTorch 1D-CNN (LOPO, on-the-fly rotation augmentation, MLflow, ONNX parity) — started early, in parallel with H1
+- [ ] [S] Robust features ‖ [S] rep-counter rework (mandatory) ‖ evaluate dropping FFT features
 - [ ] [S] DVC pipeline + `model-regression` CI job
 - [ ] [O] Select production model; model card
 
 ### Phase 5: services MVP
-- [ ] [O] OpenAPI contract, DB schema, AMQP schemas
+- [x] [O] Spec `docs/specs/phase5-services.md`; contracts: `contracts/openapi/core-api.yaml` (17 operations), `contracts/events/session-{uploaded,analyzed}.schema.json`; DB schema in the spec
 - [ ] [S] core-api ‖ [S] inference-svc ‖ [S] compose + UBI Dockerfiles
 - [ ] [S] Phone upload/results/history/corrections + UI tests
 - [ ] [S] REST Assured E2E
@@ -96,6 +98,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-23: Phase 3 spec + U2 checklist written; H1 (harness) and C1 (CNN) started in parallel; Phase 5 spec and contracts written, V1 (core-api) started.
 - 2026-10-23: Added `docs/BUILD_JOURNAL.md` (full journey, blog-series structure) at the owner's request; added to the session ritual. U2 session 1 planned for Sunday 2026-10-25.
 - 2026-10-23: Pushed `dev`; first `android-ci` and `ml-ci` runs on GitHub both green. U1 recorded and analyzed: Android frame, units and gyro handedness confirmed on the real watch.
 - 2026-10-22: Phase 2 complete. P2c and P4 merged; remote launch verified on device; dimming removed at owner's request (D-025).

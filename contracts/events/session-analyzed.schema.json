@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proprio.dev/contracts/events/session-analyzed/1",
+  "title": "session.analyzed",
+  "description": "Published by inference-svc on exchange proprio.events (routing key session.analyzed). Consumed by core-api, which stores the predictions idempotently (key: session_id + segment_id + model.version).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "occurred_at", "caused_by", "session_id", "status"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "format": "uuid" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "caused_by": { "type": "string", "format": "uuid", "description": "event_id of the session.uploaded event" },
+    "session_id": { "type": "string", "format": "uuid" },
+    "status": { "enum": ["ok", "failed"] },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "enum": ["hash_mismatch", "invalid_format", "object_missing", "unsupported_device", "internal"] },
+        "message": { "type": "string", "maxLength": 1000 },
+        "retryable": { "type": "boolean" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "uri": { "type": "string" }
+      }
+    },
+    "profile_id": { "type": "string" },
+    "transform_id": { "type": "string" },
+    "recording_stats": {
+      "type": "object",
+      "description": "From workout_ml.sensors.android.recording_stats: rate, gaps, drift",
+      "additionalProperties": true
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["segment_id", "kind", "start_s", "end_s"],
+        "properties": {
+          "segment_id": { "type": "integer" },
+          "kind": { "enum": ["set", "rest", "other", "calibration"] },
+          "start_s": { "type": "number" },
+          "end_s": { "type": "number" },
+          "predicted_exercise": { "enum": ["bench", "squat", "dead", "ohp", "row", null] },
+          "predicted_kind": { "enum": ["set", "rest"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "rep_count": { "type": ["integer", "null"], "minimum": 0 }
+        }
+      }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "const": "failed" } } }, "then": { "required": ["error"] } },
+    { "if": { "properties": { "status": { "const": "ok" } } }, "then": { "required": ["model", "profile_id", "transform_id", "segments"] } }
+  ]
+}
