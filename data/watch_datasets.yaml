@@ -1,0 +1,12 @@
+# Logical watch datasets (docs/specs/phase3-domain-shift.md section 2): name -> raw session ids.
+# Raw zips live in data/raw/watch/<calibration|gym>/proprio-session-<id>.zip (DVC-tracked).
+# Freezing watch-val-v1 means adding its id here in a reviewed commit; it is never trained on.
+watch-calib-v1:
+  sessions:
+    - 9390dce6-8af1-44b7-9306-31994e90e314   # U1, calibration at home
+watch-fit-v1:
+  sessions: []   # U2 session 1: fits R, tunes the rejection threshold
+watch-val-v1:
+  sessions: []   # U2 session 2: frozen held-out validation, the verdict
+watch-u3-v1:
+  sessions: []   # U3 friends' sessions: between-user variance
