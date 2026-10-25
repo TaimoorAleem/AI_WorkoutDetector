@@ -6,12 +6,14 @@ on:
     paths:
       - "apps/android/**"
       - "protocol/**"
+      - "contracts/**"
       - ".github/workflows/android-ci.yml"
   pull_request:
     branches: [dev, main]
     paths:
       - "apps/android/**"
       - "protocol/**"
+      - "contracts/**"
       - ".github/workflows/android-ci.yml"
 
 permissions:
@@ -48,12 +50,14 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      # :api-client generates its Kotlin client from contracts/openapi/core-api.yaml at build time; its test fails if
+      # the contract and the generated operations drift. :backend:test skips the live-stack E2E (no env var in CI).
       # :protocol:test includes GoldenTest, which regenerates the golden sessions and
       # compares them with the committed files in protocol/golden (the golden-file guard).
       - name: Test, build and lint
         run: >
           ./gradlew --no-daemon
-          :protocol:test :wear:testDebugUnitTest :mobile:testDebugUnitTest
+          :protocol:test :api-client:test :backend:test :wear:testDebugUnitTest :mobile:testDebugUnitTest
           :wear:assembleDebug :mobile:assembleDebug
           :wear:lintDebug :mobile:lintDebug
 

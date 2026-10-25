@@ -2,7 +2,7 @@
 # Latest stable releases that resolve together AND build against compileSdk 36 (checked 2026-10).
 # The newest AndroidX (Compose 1.12, core 1.19, wear-compose 1.7) needs compileSdk 37, which is
 # not installed; bump these together with compileSdk when the SDK platform is added.
-agp = "9.4.1"
+agp = "9.0.0"  # newest AGP that Android Studio 2025.3 can sync; raise it after updating Studio
 kotlin = "2.4.21"
 kotlinx-serialization = "1.12.0"
 compose-bom = "2026.03.01"
@@ -23,6 +23,15 @@ androidx-test-ext = "1.3.0"
 androidx-test-runner = "1.7.0"
 androidx-test-core = "1.7.0"
 espresso = "3.7.0"
+
+# backend (:api-client, :backend, :mobile)
+openapi-generator = "7.14.0"
+retrofit = "3.0.0"
+# OkHttp 5.5.1 needs compileSdk 37 (not installed); 5.1.0 builds against 36. Bump together with compileSdk.
+okhttp = "5.1.0"
+snakeyaml = "2.4"
+workmanager = "2.12.0"
+tink = "1.24.0"
 
 # wear
 wear = "1.4.0"
@@ -61,6 +70,19 @@ androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-te
 espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
 
+# backend
+retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
+retrofit-converter-kotlinx = { module = "com.squareup.retrofit2:converter-kotlinx-serialization", version.ref = "retrofit" }
+retrofit-converter-scalars = { module = "com.squareup.retrofit2:converter-scalars", version.ref = "retrofit" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+okhttp-logging = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okhttp" }
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version.ref = "okhttp" }
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workmanager" }
+work-testing = { module = "androidx.work:work-testing", version.ref = "workmanager" }
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+
 # wear
 wear = { module = "androidx.wear:wear", version.ref = "wear" }
 wear-ongoing = { module = "androidx.wear:wear-ongoing", version.ref = "wear-ongoing" }
@@ -72,4 +94,5 @@ concurrent-futures-ktx = { module = "androidx.concurrent:concurrent-futures-ktx"
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+openapi-generator = { id = "org.openapi.generator", version.ref = "openapi-generator" }
+kotlin-compose ={ id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

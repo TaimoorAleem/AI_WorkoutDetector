@@ -1,0 +1,22 @@
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        retry:
+          initial-interval: 100ms
+          max-attempts: 2
+proprio:
+  auth:
+    argon2: # cheap parameters: tests hash a lot of passwords
+      memory-kib: 1024
+      iterations: 1
+      parallelism: 1
+    rate-limit:
+      email-capacity: 5
+      email-refill-per-minute: 1
+      ip-capacity: 10000
+      ip-refill-per-minute: 10000
+  storage:
+    create-bucket-on-start: true
+  outbox:
+    poll-interval: 100ms

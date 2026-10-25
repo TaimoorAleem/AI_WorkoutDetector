@@ -26,7 +26,12 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.proprio.backend.BaseUrl
 import dev.proprio.mobile.AppContainer
+import dev.proprio.mobile.AuthViewModel
+import dev.proprio.mobile.BuildConfig
+import dev.proprio.mobile.HistoryViewModel
+import dev.proprio.mobile.SessionBackendViewModel
 import dev.proprio.mobile.RecordingsViewModel
 import dev.proprio.mobile.ReviewViewModel
 import dev.proprio.mobile.SettingsViewModel
@@ -38,7 +43,7 @@ fun ProprioTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(), content = content)
 }
 
-private enum class Tab(val label: String) { SESSION("Session"), RECORDINGS("Recordings"), SETTINGS("Settings") }
+private enum class Tab(val label: String) { SESSION("Session"), RECORDINGS("Recordings"), HISTORY("History"), SETTINGS("Settings") }
 
 @Composable
 fun AppRoot(container: AppContainer) {
@@ -49,6 +54,16 @@ fun AppRoot(container: AppContainer) {
 
     var tab by rememberSaveable { mutableStateOf(Tab.SESSION) }
     var reviewId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showAuth by rememberSaveable { mutableStateOf(false) }
+    val authVm: AuthViewModel = viewModel(factory = viewModelFactory { initializer { AuthViewModel(container.backend) } })
+    val authState by authVm.auth.collectAsState()
+    val authUi by authVm.state.collectAsState()
+    val serverUrl = settings.serverUrl.ifBlank { AppContainer.defaultBaseUrl() }
+    val saveSettings: (String, Boolean, Boolean) -> Unit = { id, consent, wrist ->
+        val consentChanged = consent != settings.trainingConsent
+        settingsVm.save(id, consent, wrist)
+        if (consentChanged) scope.launch { container.backend.setConsent(consent) }
+    }
 
     val share: (String) -> Unit = { id ->
         scope.launch {
@@ -57,7 +72,21 @@ fun AppRoot(container: AppContainer) {
     }
 
     if (!settings.firstRunComplete) {
-        SettingsScreen(settings, firstRun = true, onSave = settingsVm::save, modifier = Modifier)
+        SettingsScreen(settings, firstRun = true, onSave = saveSettings, modifier = Modifier)
+        return
+    }
+
+    if (showAuth) {
+        BackHandler { showAuth = false }
+        AuthScreen(
+            state = authUi,
+            serverUrl = serverUrl,
+            initialParticipantId = settings.participantId,
+            initialConsent = settings.trainingConsent,
+            onLogin = { e, p -> authVm.login(e, p) { showAuth = false } },
+            onRegister = { e, p, pid, c -> authVm.register(e, p, pid, c) { showAuth = false } },
+            onCancel = { authVm.clearError(); showAuth = false },
+        )
         return
     }
 
@@ -66,7 +95,7 @@ fun AppRoot(container: AppContainer) {
         BackHandler { reviewId = null }
         val vm: ReviewViewModel = viewModel(
             key = "review-$review",
-            factory = viewModelFactory { initializer { ReviewViewModel(review, container.store, container.exporter) } },
+            factory = viewModelFactory { initializer { ReviewViewModel(review, container.store, container.exporter, onLabelsChanged = { container.queueUpload(review) }) } },
         )
         val state by vm.state.collectAsState()
         ReviewScreen(
@@ -76,6 +105,21 @@ fun AppRoot(container: AppContainer) {
             onEdit = vm::applyEdit,
             onNudge = vm::nudge,
             onExport = { scope.launch { runCatching { vm.export() }.onSuccess { shareZip(context, it) } } },
+            extra = {
+                val backendVm: SessionBackendViewModel = viewModel(
+                    key = "backend-$review",
+                    factory = viewModelFactory {
+                        initializer { SessionBackendViewModel(review, container.analysis, container.uploadStates, container.backend.auth.state) }
+                    },
+                )
+                val backendState by backendVm.state.collectAsState()
+                BackendPanel(
+                    state = backendState,
+                    onSignIn = { showAuth = true },
+                    onUpload = { container.uploadNow(review) },
+                    onRefresh = backendVm::refresh,
+                )
+            },
         )
         return
     }
@@ -95,9 +139,30 @@ fun AppRoot(container: AppContainer) {
             Tab.RECORDINGS -> {
                 val vm: RecordingsViewModel = viewModel(factory = viewModelFactory { initializer { RecordingsViewModel(container.store) } })
                 val items by vm.items.collectAsState()
-                RecordingsScreen(items, onOpen = { reviewId = it }, onExport = share, modifier = m)
+                val tick by container.uploadStates.changes.collectAsState()
+                val uploads = remember(items, tick) {
+                    items.mapNotNull { i -> container.uploadStates.get(i.summary.sessionId)?.let { i.summary.sessionId to it } }.toMap()
+                }
+                RecordingsScreen(items, onOpen = { reviewId = it }, onExport = share, modifier = m, uploads = uploads)
             }
-            Tab.SETTINGS -> SettingsScreen(settings, firstRun = false, onSave = settingsVm::save, modifier = m)
+            Tab.HISTORY -> {
+                val vm: HistoryViewModel = viewModel(
+                    factory = viewModelFactory { initializer { HistoryViewModel(container.history, container.backend.auth.state) } },
+                )
+                val state by vm.state.collectAsState()
+                HistoryScreen(state, onRefresh = vm::refresh, onSignIn = { showAuth = true }, modifier = m)
+            }
+            Tab.SETTINGS -> SettingsScreen(settings, firstRun = false, onSave = saveSettings, modifier = m, extra = {
+                AccountSection(
+                    auth = authState,
+                    serverUrl = settings.serverUrl,
+                    defaultServerUrl = AppContainer.defaultBaseUrl(),
+                    urlProblem = { BaseUrl.problem(it, allowCleartext = BuildConfig.DEBUG) },
+                    onSaveServerUrl = settingsVm::saveServerUrl,
+                    onSignIn = { showAuth = true },
+                    onSignOut = authVm::logout,
+                )
+            })
         }
     }
 }

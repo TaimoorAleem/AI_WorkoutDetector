@@ -27,6 +27,12 @@ dev = [
     "dvc>=3",
     "uv>=0.4",
 ]
+# Optional deep-learning extra (Phase 4 CNN); locked separately in requirements-dl.lock.
+dl = [
+    "torch>=2.4",
+    "onnx>=1.16",
+    "onnxruntime>=1.18",
+]
 
 [tool.setuptools.packages.find]
 include = ["workout_ml*"]

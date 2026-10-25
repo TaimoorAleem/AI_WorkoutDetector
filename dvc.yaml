@@ -1,0 +1,44 @@
+# Phase 3 watch harness. With only the U1 calibration session (no gym sessions yet) the
+# fit_profile and evaluate stages exit cleanly with "no gym sessions yet".
+# Run with the proprio conda env active and `pip install -e ml --no-deps`.
+stages:
+  calibration_check:
+    cmd: python -m workout_ml.watch.ingest --calibration-check ${watch.datasets.calib} --out results/metrics/watch_calibration.json
+    deps:
+      - data/raw/watch
+      - data/watch_datasets.yaml
+      - ml/workout_ml/watch
+      - ml/workout_ml/sensors
+    metrics:
+      - results/metrics/watch_calibration.json:
+          cache: false
+
+  fit_profile:
+    cmd: python -m workout_ml.watch.calibrate --fit ${watch.datasets.fit} --out results/metrics/watch_fit.json
+    deps:
+      - data/raw/watch
+      - data/raw/MetaMotion
+      - data/watch_datasets.yaml
+      - ml/workout_ml/watch
+      - ml/workout_ml/sensors
+      - ml/workout_ml/data
+      - ml/workout_ml/config.py
+    metrics:
+      - results/metrics/watch_fit.json:
+          cache: false
+
+  evaluate:
+    cmd: >-
+      python -m workout_ml.watch.evaluate --fit ${watch.datasets.fit} --eval ${watch.datasets.eval}
+      --models ${watch.models} --tau-default ${watch.tau_default} --calib ${watch.datasets.calib}
+      --metrics-out results/metrics/watch_eval.json
+    deps:
+      - data/raw/watch
+      - data/raw/MetaMotion
+      - data/watch_datasets.yaml
+      - results/metrics/watch_calibration.json
+      - results/metrics/watch_fit.json
+      - ml/workout_ml
+    metrics:
+      - results/metrics/watch_eval.json:
+          cache: false

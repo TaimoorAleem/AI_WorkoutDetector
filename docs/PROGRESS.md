@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 3: calibration + domain shift (Phases 0–2 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** Before Sunday 2026-10-25 (owner's planned gym session = U2 session 1): orchestrator writes the U2 checklist and the Phase 3 analysis spec (eval harness, R fit, Galaxy profile, domain-shift report).
+- **Next step:** Phase 5 MVP code complete (V1–V4 merged). Owner: on-device check of V4 (phone + PC on the same Wi-Fi; steps in `apps/android/mobile/README.md`), and push `dev` so `services-ci` runs for the first time. Sunday 2026-10-25: U2 session 1 (`docs/U2_CHECKLIST.md`); orchestrator then runs `python -m workout_ml.watch.evaluate --in-sample watch-fit-v1`.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
@@ -67,19 +67,23 @@
 - [x] [U] U1 calibration: |a| 0.989 g, gyro bias 0.11 deg/s, all 6 poses on the expected axes, gyro signs and units confirmed; data in DVC (`data/raw/watch.dvc`)
 - [ ] [U] U2 (×2), U3
 - [x] [O] Phase 3 spec `docs/specs/phase3-domain-shift.md`; owner checklist `docs/U2_CHECKLIST.md`
-- [ ] [S] H1 eval harness (`workout_ml.watch`: ingest, calibration_check, Kabsch R fit, gates, report, DVC stages)
+- [x] [S] H1 eval harness `workout_ml.watch` (ingest, calibration_check, weighted Kabsch with det/conditioning checks, τ, gates, diagnostics, report, MLflow, `dvc.yaml`); reproduces U1 numbers; recovers synthetic R within 0.07°
 - [ ] [O] Verify units/rates; fit R; write Galaxy Watch profile; freeze `watch-val-v1`; domain-shift report (bench/OHP confusion as its own line item)
 
 ### Phase 4: remediation + PyTorch
 - [ ] [O] Choose a branch of the decision tree
-- [ ] [S] C1 PyTorch 1D-CNN (LOPO, on-the-fly rotation augmentation, MLflow, ONNX parity) — started early, in parallel with H1
+- [x] [S] C1 PyTorch 1D-CNN: LOPO set acc 0.986 ± 0.032, macro-F1 0.959 (ties KNN); ONNX parity 1.3e-6; `requirements-dl.lock` (CPU torch, optional `dl` extra); `WatchPredictor` API used by the harness as M4
 - [ ] [S] Robust features ‖ [S] rep-counter rework (mandatory) ‖ evaluate dropping FFT features
 - [ ] [S] DVC pipeline + `model-regression` CI job
 - [ ] [O] Select production model; model card
 
 ### Phase 5: services MVP
 - [x] [O] Spec `docs/specs/phase5-services.md`; contracts: `contracts/openapi/core-api.yaml` (17 operations), `contracts/events/session-{uploaded,analyzed}.schema.json`; DB schema in the spec
-- [ ] [S] core-api ‖ [S] inference-svc ‖ [S] compose + UBI Dockerfiles
+- [x] [S] V1 core-api (Spring Boot 3.5, contract-first, Argon2id, RS256 JWT + rotating refresh, outbox, IDOR tests; 61 tests incl. 35 Testcontainers; UBI image healthy)
+- [x] [S] V2 inference-svc (FastAPI + pika worker; shared `workout_ml.watch.predict.analyze_session`; TTL delay-queue retries ×3 → DLQ + `failed` event; deterministic UUIDv5 event ids; 36 tests incl. 4 Testcontainers; UBI image healthy)
+- [x] [S] V3 `deploy/compose.yaml` (healthy from clean; synthetic `model-init` for CI), REST Assured E2E (10 tests, spec §6 steps 1–10), `services-ci.yml` (not yet run on GitHub)
+- [x] [S] V4 phone ↔ backend: generated Kotlin client (`:api-client`, OpenAPI Generator, all 17 ops), `:backend` (auth refresh/rotation, idempotent `UploadCore`, analysis mapping), WorkManager upload, login/history/analysis UI, Tink-encrypted refresh token; stack E2E reached ANALYZED
+- [ ] [U] V4 on-device check (same Wi-Fi; `S3_PUBLIC_ENDPOINT` = PC LAN IP; firewall 8080/9000)
 - [ ] [S] Phone upload/results/history/corrections + UI tests
 - [ ] [S] REST Assured E2E
 - [ ] [O] Integration review
@@ -98,6 +102,10 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-25: V4 phone ↔ backend reviewed and merged (D-029). Phase 5 MVP code complete; on-device verification pending.
+- 2026-10-25: V3 compose + E2E + services CI reviewed and merged (D-028). V4 next.
+- 2026-10-23: V2 inference-svc reviewed and merged (D-027). V3 started.
+- 2026-10-23: H1, C1 and V1 merged. README rewritten; GitHub repo renamed to Proprio. Owner made the interview notes private: untracked, purged from `dev`/`main` history with git filter-repo in a separate clone, force-pushed with leases (D-026). Merged helper branches and worktrees removed.
 - 2026-10-23: Phase 3 spec + U2 checklist written; H1 (harness) and C1 (CNN) started in parallel; Phase 5 spec and contracts written, V1 (core-api) started.
 - 2026-10-23: Added `docs/BUILD_JOURNAL.md` (full journey, blog-series structure) at the owner's request; added to the session ritual. U2 session 1 planned for Sunday 2026-10-25.
 - 2026-10-23: Pushed `dev`; first `android-ci` and `ml-ci` runs on GitHub both green. U1 recorded and analyzed: Android frame, units and gyro handedness confirmed on the real watch.
