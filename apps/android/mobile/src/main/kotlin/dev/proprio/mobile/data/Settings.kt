@@ -16,6 +16,8 @@ data class UserSettings(
     val trainingConsent: Boolean = false,
     val consentAtUtc: String? = null,
     val leftWristAcknowledged: Boolean = false,
+    /** Backend base URL; blank means the build's default (BuildConfig). */
+    val serverUrl: String = "",
 ) {
     val firstRunComplete: Boolean get() = participantId.isNotBlank() && leftWristAcknowledged
 

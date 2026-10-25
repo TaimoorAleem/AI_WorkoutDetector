@@ -33,6 +33,8 @@ fun SettingsScreen(
     firstRun: Boolean,
     onSave: (participantId: String, trainingConsent: Boolean, leftWrist: Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /** Extra cards under the form (account and server address; not shown on first run). */
+    extra: @Composable () -> Unit = {},
 ) {
     var id by remember(settings) { mutableStateOf(settings.participantId) }
     var consent by remember(settings) { mutableStateOf(settings.trainingConsent) }
@@ -79,5 +81,6 @@ fun SettingsScreen(
             enabled = valid && wrist,
             modifier = Modifier.fillMaxWidth().testTag("save_settings"),
         ) { Text(if (firstRun) "Continue" else "Save") }
+        extra()
     }
 }

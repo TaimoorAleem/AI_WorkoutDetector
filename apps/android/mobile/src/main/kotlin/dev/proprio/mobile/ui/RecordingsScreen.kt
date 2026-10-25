@@ -26,6 +26,8 @@ fun RecordingsScreen(
     onOpen: (String) -> Unit,
     onExport: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Backend upload state per session id, for the status line. */
+    uploads: Map<String, dev.proprio.backend.UploadState> = emptyMap(),
 ) {
     if (items.isEmpty()) {
         Column(modifier.fillMaxSize().padding(16.dp)) {
@@ -46,9 +48,10 @@ fun RecordingsScreen(
                     Text("Duration ${formatElapsed(s.durationS)}  -  ${item.setCount} ${if (s.kind == SessionKind.GYM) "sets" else "steps"}")
                     Row {
                         Text(
-                            listOf(
+                            listOfNotNull(
                                 if (s.complete) "complete" else "incomplete",
                                 if (item.labeled) "labeled" else "unlabeled",
+                                uploadChip(uploads[s.sessionId]),
                             ).joinToString(", "),
                             Modifier.weight(1f).testTag("status_${s.sessionId}"),
                         )

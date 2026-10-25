@@ -83,6 +83,8 @@ class SessionCoordinator(
     private val settings: SettingsStore,
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /** Called when a session's zip was stored or its labels changed (the app queues a backend upload from here). */
+    private val onSessionChanged: (sessionId: String) -> Unit = {},
 ) {
     /** Phone arrival time of each STARTED event, to measure segment length without a protocol change. */
     private val startedAtMs = HashMap<Pair<String, Int>, Long>()
@@ -111,7 +113,8 @@ class SessionCoordinator(
             link.incomingZips.collect { zip ->
                 val ack = withContext(io) { importer.import(zip.sessionId, zip.file) }
                 link.sendAck(ack)
-                if (!ack.ok) message.value = "Received a corrupt session from the watch; it will be retried."
+                if (ack.ok) onSessionChanged(zip.sessionId)
+                else message.value = "Received a corrupt session from the watch; it will be retried."
             }
         }
         scope.launch { link.refresh() }
@@ -173,6 +176,7 @@ class SessionCoordinator(
                 }
             }
             prompt.value = null
+            onSessionChanged(p.sessionId)
         }
     }
 
@@ -186,6 +190,7 @@ class SessionCoordinator(
                 }
             }
             prompt.value = null
+            onSessionChanged(p.sessionId)
         }
     }
 

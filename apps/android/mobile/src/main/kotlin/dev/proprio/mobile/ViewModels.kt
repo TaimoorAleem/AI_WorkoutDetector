@@ -34,6 +34,8 @@ import kotlinx.coroutines.withContext
 class SettingsViewModel(private val store: SettingsStore) : ViewModel() {
     val settings: StateFlow<UserSettings> = store.settings
 
+    fun saveServerUrl(url: String) = store.update { it.copy(serverUrl = url.trim()) }
+
     /** Records a new consent timestamp only when the consent value actually changes. */
     fun save(participantId: String, trainingConsent: Boolean, leftWristAcknowledged: Boolean, now: Instant = Instant.now()) {
         store.update {
@@ -70,6 +72,8 @@ class ReviewViewModel(
     private val store: SessionStore,
     private val exporter: ExportBuilder,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    /** Called after edited labels were saved (the app re-syncs them to the backend). */
+    private val onLabelsChanged: () -> Unit = {},
 ) : ViewModel() {
     private val _state = MutableStateFlow(ReviewUiState(sessionId = sessionId))
     val state: StateFlow<ReviewUiState> = _state.asStateFlow()
@@ -118,6 +122,7 @@ class ReviewViewModel(
             val next = withContext(io) { store.updateLabels(sessionId, transform) }
             labels = next
             _state.update { it.copy(segments = SegmentResolver.resolve(s.meta.kind, s.segments, next)) }
+            onLabelsChanged()
         }
     }
 

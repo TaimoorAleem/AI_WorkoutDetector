@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "proprio-android"
-include(":protocol", ":wear", ":mobile")
+include(":protocol", ":api-client", ":backend", ":wear", ":mobile")
