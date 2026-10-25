@@ -102,3 +102,10 @@ The owner added `docs/INTERVIEW_NOTES.md` to `.gitignore`. Ignoring doesn't untr
 - **Process model.** API and worker in one process (worker as a thread): one model in memory, one `/health`. A standalone worker entrypoint exists for scaling separately.
 - **Known trade-off.** `session.analyzed` is published `mandatory`; if core-api's queue isn't declared yet the message is redelivered without a cap, chosen over losing results.
 - **Model files** are joblib (pickle) bundles, treated as trusted artifacts mounted or fetched from MLflow, never committed (constraint: no pickles in git).
+
+**D-028 · 2026-10-25 · Local stack: two S3 endpoints, synthetic model for CI, dev-only keys**
+- **Presigning.** Services reach MinIO as `http://minio:9000`; presigned URLs are signed for `S3_PUBLIC_ENDPOINT` (default `http://localhost:9000`, a LAN address for a real phone), because a signature is bound to the host the client uses.
+- **Model in CI.** The real model needs DVC data CI doesn't have, so a one-shot `model-init` job trains a bundle on synthetic data named `synthetic-fixture` (it can't be mistaken for a real model). A real bundle mounted via `MODEL_DIR` is never overwritten. The E2E asserts structure and the state machine, not exercise labels.
+- **Keys.** core-api's `dev` profile generates an ephemeral RS256 key at startup; no private key is committed. A fixed key needs the `prod` profile.
+- **MinIO.** Chainguard's distroless image (the community image left Docker Hub) has no shell, so it has no healthcheck; the `createbuckets` job gates dependents instead. Chainguard's free tier only publishes `:latest`, an accepted reproducibility gap for the local stack.
+- **Deferred.** The MLflow tracking server in compose (not needed by the Phase 5 services).

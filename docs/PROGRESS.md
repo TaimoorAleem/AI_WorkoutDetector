@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 3: calibration + domain shift (Phases 0–2 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** V3 (compose stack, E2E, services CI) running. Then V4 (phone upload). Sunday 2026-10-25: owner records U2 session 1 (`docs/U2_CHECKLIST.md`); orchestrator runs `python -m workout_ml.watch.evaluate --in-sample watch-fit-v1` that evening.
+- **Next step:** V4 (phone upload). Sunday 2026-10-25: owner records U2 session 1 (`docs/U2_CHECKLIST.md`); orchestrator runs `python -m workout_ml.watch.evaluate --in-sample watch-fit-v1` that evening.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
@@ -81,7 +81,7 @@
 - [x] [O] Spec `docs/specs/phase5-services.md`; contracts: `contracts/openapi/core-api.yaml` (17 operations), `contracts/events/session-{uploaded,analyzed}.schema.json`; DB schema in the spec
 - [x] [S] V1 core-api (Spring Boot 3.5, contract-first, Argon2id, RS256 JWT + rotating refresh, outbox, IDOR tests; 61 tests incl. 35 Testcontainers; UBI image healthy)
 - [x] [S] V2 inference-svc (FastAPI + pika worker; shared `workout_ml.watch.predict.analyze_session`; TTL delay-queue retries ×3 → DLQ + `failed` event; deterministic UUIDv5 event ids; 36 tests incl. 4 Testcontainers; UBI image healthy)
-- [ ] [S] V3 compose + E2E + services CI
+- [x] [S] V3 `deploy/compose.yaml` (healthy from clean; synthetic `model-init` for CI), REST Assured E2E (10 tests, spec §6 steps 1–10), `services-ci.yml` (not yet run on GitHub)
 - [ ] [S] Phone upload/results/history/corrections + UI tests
 - [ ] [S] REST Assured E2E
 - [ ] [O] Integration review
@@ -100,6 +100,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-25: V3 compose + E2E + services CI reviewed and merged (D-028). V4 next.
 - 2026-10-23: V2 inference-svc reviewed and merged (D-027). V3 started.
 - 2026-10-23: H1, C1 and V1 merged. README rewritten; GitHub repo renamed to Proprio. Owner made the interview notes private: untracked, purged from `dev`/`main` history with git filter-repo in a separate clone, force-pushed with leases (D-026). Merged helper branches and worktrees removed.
 - 2026-10-23: Phase 3 spec + U2 checklist written; H1 (harness) and C1 (CNN) started in parallel; Phase 5 spec and contracts written, V1 (core-api) started.
