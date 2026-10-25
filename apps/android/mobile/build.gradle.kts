@@ -18,6 +18,11 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Backend base URL used until the user sets one in Settings. Override with -Pproprio.apiBaseUrl=...
+        // (the debug default 10.0.2.2 is the host PC as seen from the emulator; a real phone needs the PC's LAN address).
+        val apiBaseUrl = providers.gradleProperty("proprio.apiBaseUrl").orNull
+        buildConfigField("String", "DEFAULT_API_BASE_URL_DEBUG", "\"${apiBaseUrl ?: "http://10.0.2.2:8080"}\"")
+        buildConfigField("String", "DEFAULT_API_BASE_URL_RELEASE", "\"${apiBaseUrl ?: "https://api.proprio.invalid"}\"")
     }
 
     testOptions {
@@ -40,6 +45,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -51,6 +57,9 @@ kotlin {
 
 dependencies {
     implementation(project(":protocol"))
+    implementation(project(":backend"))
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.tink.android)
     implementation(libs.core.ktx)
     implementation(libs.activity.compose)
     implementation(libs.play.services.wearable)
@@ -69,6 +78,8 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.work.testing)
+    testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.json.schema.validator)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)

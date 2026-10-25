@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Debug only (src/debug). Domain rules cannot express LAN ranges, so cleartext is allowed for all hosts here. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

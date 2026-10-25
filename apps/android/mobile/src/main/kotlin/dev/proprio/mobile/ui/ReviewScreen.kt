@@ -72,6 +72,8 @@ fun ReviewScreen(
     onNudge: (segmentId: Int, dStartNs: Long, dEndNs: Long) -> Unit,
     onExport: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Extra content under the header, e.g. the backend upload/analysis card. */
+    extra: @Composable () -> Unit = {},
 ) {
     Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -79,6 +81,7 @@ fun ReviewScreen(
             Text("Review", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
             Button(onClick = onExport, enabled = !state.loading && state.error == null, modifier = Modifier.testTag("export")) { Text("Export") }
         }
+        extra()
         when {
             state.loading -> Text("Loading...")
             state.error != null -> Text(state.error, color = MaterialTheme.colorScheme.error)
