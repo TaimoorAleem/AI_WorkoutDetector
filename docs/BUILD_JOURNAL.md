@@ -318,6 +318,12 @@ I misread one rotation step and did mostly the wrong axis. Instead of re-recordi
 - **Idempotent by design:** the result event's id is derived from the upload event's id, so a redelivered message produces an identical event that core-api ignores.
 - **Tests:** 36, four of them against real RabbitMQ and MinIO containers, including actual TTL retries ending in the DLQ. The UBI image starts healthy and reports the loaded model's version (git SHA + training-data hash).
 
+### The whole stack on one command (V3)
+- `docker compose up --build --wait` brings up PostgreSQL (with pgvector for the coach later), RabbitMQ, MinIO, core-api and inference, all healthy, with one-shot jobs for the bucket and the model.
+- **An end-to-end suite in Java (REST Assured)** plays the phone: register, log in, create a session, upload the golden recording straight to object storage, complete it, wait for the analysis to come back over RabbitMQ, edit labels with optimistic locking, rotate refresh tokens, prove another user gets 404, delete the account. 10 tests, about 7 s.
+- **A subtle networking point:** a presigned URL is only valid for the host it was signed for, so the backend signs for the address the *phone* uses, not the internal container name.
+- **CI without the private data:** the training data lives in DVC, so CI trains a deliberately labeled synthetic model just to exercise the plumbing.
+
 ## Housekeeping worth telling
 - **Renamed the GitHub repo to Proprio** and rewrote the README around the product.
 - **Made the interview notes private.** That meant learning the hard way that `.gitignore` doesn't untrack a committed file.
