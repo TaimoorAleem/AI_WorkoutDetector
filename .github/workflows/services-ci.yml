@@ -1,0 +1,143 @@
+name: services-ci
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - "services/**"
+      - "contracts/**"
+      - "deploy/**"
+      - "ml/**"
+      - "protocol/**"
+      - ".github/workflows/services-ci.yml"
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - "services/**"
+      - "contracts/**"
+      - "deploy/**"
+      - "ml/**"
+      - "protocol/**"
+      - ".github/workflows/services-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: services/core-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # build = compile, spotlessCheck, unit + Testcontainers tests (Docker is on the runner), bootJar
+      - name: Build and test
+        run: ./gradlew --no-daemon --console=plain build
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-api-test-reports
+          path: services/core-api/build/reports/tests/
+          if-no-files-found: ignore
+
+  inference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: services/inference
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            services/inference/requirements-dev.lock
+            ml/requirements-dev.lock
+
+      - name: Install (dev lock, then workout_ml and the service without deps)
+        run: |
+          pip install -r requirements-dev.lock
+          pip install --no-deps -e ../../ml -e .
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      # Includes the Testcontainers integration tests (RabbitMQ, MinIO); the fixture model is
+      # trained on synthetic data, so no DVC data is needed.
+      - name: Test
+        run: pytest -q --junitxml=pytest-report.xml
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inference-test-report
+          path: services/inference/pytest-report.xml
+          if-no-files-found: ignore
+
+  e2e:
+    needs: [core-api, inference]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # --wait returns once every service is healthy and the one-shot jobs (createbuckets,
+      # model-init) have exited 0. Defaults in compose.yaml are dev-only credentials.
+      - name: Start the stack
+        run: docker compose -f deploy/compose.yaml up --build -d --wait --wait-timeout 900
+
+      - name: E2E suite
+        working-directory: services/e2e
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain e2eTest
+
+      - name: Dump stack logs
+        if: failure()
+        run: docker compose -f deploy/compose.yaml logs --no-color --timestamps
+
+      - name: Upload E2E reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-reports
+          path: services/e2e/build/reports/tests/
+          if-no-files-found: ignore
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f deploy/compose.yaml down -v
