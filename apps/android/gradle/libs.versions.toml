@@ -2,7 +2,7 @@
 # Latest stable releases that resolve together AND build against compileSdk 36 (checked 2026-10).
 # The newest AndroidX (Compose 1.12, core 1.19, wear-compose 1.7) needs compileSdk 37, which is
 # not installed; bump these together with compileSdk when the SDK platform is added.
-agp = "9.4.1"
+agp = "9.0.0"  # newest AGP that Android Studio 2025.3 can sync; raise it after updating Studio
 kotlin = "2.4.21"
 kotlinx-serialization = "1.12.0"
 compose-bom = "2026.03.01"
