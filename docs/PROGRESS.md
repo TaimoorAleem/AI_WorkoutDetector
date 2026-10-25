@@ -6,7 +6,7 @@
 ## Now
 - **Current phase:** Phase 3: calibration + domain shift (Phases 0–2 complete)
 - **Branch:** work on `feature/*` off `dev`
-- **Next step:** V4 (phone upload). Sunday 2026-10-25: owner records U2 session 1 (`docs/U2_CHECKLIST.md`); orchestrator runs `python -m workout_ml.watch.evaluate --in-sample watch-fit-v1` that evening.
+- **Next step:** Phase 5 MVP code complete (V1–V4 merged). Owner: on-device check of V4 (phone + PC on the same Wi-Fi; steps in `apps/android/mobile/README.md`), and push `dev` so `services-ci` runs for the first time. Sunday 2026-10-25: U2 session 1 (`docs/U2_CHECKLIST.md`); orchestrator then runs `python -m workout_ml.watch.evaluate --in-sample watch-fit-v1`.
 
 ## Pending owner tasks
 - [ ] Confirm Android package id (default `dev.proprio`; spec uses `dev.proprio.wear` / `dev.proprio.mobile`)
@@ -82,6 +82,8 @@
 - [x] [S] V1 core-api (Spring Boot 3.5, contract-first, Argon2id, RS256 JWT + rotating refresh, outbox, IDOR tests; 61 tests incl. 35 Testcontainers; UBI image healthy)
 - [x] [S] V2 inference-svc (FastAPI + pika worker; shared `workout_ml.watch.predict.analyze_session`; TTL delay-queue retries ×3 → DLQ + `failed` event; deterministic UUIDv5 event ids; 36 tests incl. 4 Testcontainers; UBI image healthy)
 - [x] [S] V3 `deploy/compose.yaml` (healthy from clean; synthetic `model-init` for CI), REST Assured E2E (10 tests, spec §6 steps 1–10), `services-ci.yml` (not yet run on GitHub)
+- [x] [S] V4 phone ↔ backend: generated Kotlin client (`:api-client`, OpenAPI Generator, all 17 ops), `:backend` (auth refresh/rotation, idempotent `UploadCore`, analysis mapping), WorkManager upload, login/history/analysis UI, Tink-encrypted refresh token; stack E2E reached ANALYZED
+- [ ] [U] V4 on-device check (same Wi-Fi; `S3_PUBLIC_ENDPOINT` = PC LAN IP; firewall 8080/9000)
 - [ ] [S] Phone upload/results/history/corrections + UI tests
 - [ ] [S] REST Assured E2E
 - [ ] [O] Integration review
@@ -100,6 +102,7 @@
 - [ ] Stretch: Kotlin live counter, Helm/kind, Granite LoRA
 
 ## Session log
+- 2026-10-25: V4 phone ↔ backend reviewed and merged (D-029). Phase 5 MVP code complete; on-device verification pending.
 - 2026-10-25: V3 compose + E2E + services CI reviewed and merged (D-028). V4 next.
 - 2026-10-23: V2 inference-svc reviewed and merged (D-027). V3 started.
 - 2026-10-23: H1, C1 and V1 merged. README rewritten; GitHub repo renamed to Proprio. Owner made the interview notes private: untracked, purged from `dev`/`main` history with git filter-repo in a separate clone, force-pushed with leases (D-026). Merged helper branches and worktrees removed.
