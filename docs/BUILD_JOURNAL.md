@@ -324,6 +324,13 @@ I misread one rotation step and did mostly the wrong axis. Instead of re-recordi
 - **A subtle networking point:** a presigned URL is only valid for the host it was signed for, so the backend signs for the address the *phone* uses, not the internal container name.
 - **CI without the private data:** the training data lives in DVC, so CI trains a deliberately labeled synthetic model just to exercise the plumbing.
 
+### Closing the loop on the phone (V4)
+- **The phone speaks the same contract:** its API client is generated from the OpenAPI file at build time, and a test fails if the contract and client ever drift.
+- **Uploads that survive real life:** a background job uploads each session after the watch hands it over, through Wi-Fi drops and app kills, and never sends a finished session twice. The raw file goes byte for byte; labels go separately and only when they change.
+- **Token handling done carefully:** one refresh no matter how many requests fail at once, sign-out only when the server actually refuses, and the refresh token encrypted with a key held in the phone's hardware keystore.
+- **First full loop:** against the local stack, the client's own upload code took the golden recording from registration to ANALYZED. With a synthetic model the predictions are meaningless; the point was the plumbing.
+- **Still to do by hand:** the same flow on the real phone over Wi-Fi.
+
 ## Housekeeping worth telling
 - **Renamed the GitHub repo to Proprio** and rewrote the README around the product.
 - **Made the interview notes private.** That meant learning the hard way that `.gitignore` doesn't untrack a committed file.

@@ -109,3 +109,11 @@ The owner added `docs/INTERVIEW_NOTES.md` to `.gitignore`. Ignoring doesn't untr
 - **Keys.** core-api's `dev` profile generates an ephemeral RS256 key at startup; no private key is committed. A fixed key needs the `prod` profile.
 - **MinIO.** Chainguard's distroless image (the community image left Docker Hub) has no shell, so it has no healthcheck; the `createbuckets` job gates dependents instead. Chainguard's free tier only publishes `:latest`, an accepted reproducibility gap for the local stack.
 - **Deferred.** The MLflow tracking server in compose (not needed by the Phase 5 services).
+
+**D-029 · 2026-10-25 · Phone ↔ backend: generated client, JVM-testable core, refresh token in a Tink vault**
+- **Contract-first on the phone too.** The Kotlin client is generated at build time from `contracts/openapi/core-api.yaml` (OpenAPI Generator 7.14.0, same as core-api; `jvm-retrofit2` + kotlinx.serialization), never committed. A test asserts the generated methods equal the contract's 17 operations. Two generator workarounds (free-form `LabelsDocument` → `Map<String, JsonElement>`, `@JvmSuppressWildcards` patch) live in the module's build script.
+- **Logic in a pure-JVM `:backend` module** (auth, upload, analysis mapping), so it's tested with MockWebServer without Android; `:mobile` only wires WorkManager, storage and UI.
+- **Auth.** Access token in memory; refresh token encrypted with Tink (AES-256-GCM, keyset wrapped by an Android Keystore key; `security-crypto` is deprecated). One synchronized refresh per 401 burst, on a separate dispatcher to avoid deadlock; refusal signs out, a network failure doesn't. Known limit: a crash between server rotation and local save forces a re-login.
+- **Upload idempotency.** create → PUT untouched zip → complete → labels; 409s resolve by reading server state; completion persisted per session so a finished session is never resent; labels only when their hash changes, with ETag/If-Match. WorkManager: network constraint, exponential backoff, 6 attempts, unique work per session.
+- **OkHttp pinned at 5.1.0** because 5.5.1 needs compileSdk 37, which CI doesn't install.
+- **Debug builds allow cleartext to any host** (network-security domain rules can't express LAN ranges); release builds reject `http://`.
